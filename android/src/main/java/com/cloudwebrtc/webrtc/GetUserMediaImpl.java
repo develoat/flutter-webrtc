@@ -545,7 +545,7 @@ class GetUserMediaImpl {
                             info.width = (int)(wm.getDefaultDisplay().getWidth() * heightRatio);
                         }else{
                             //基準の高さ以下なので、そのままのサイズ
-                            info.height = height;
+                            info.height = (int)height;
                             info.width = wm.getDefaultDisplay().getWidth();
                         }
                         info.fps = DEFAULT_FPS;
