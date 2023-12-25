@@ -85,7 +85,8 @@ class GetUserMediaImpl {
 
     private static final int DEFAULT_WIDTH = 1280;
     private static final int DEFAULT_HEIGHT = 720;
-    private static final int DEFAULT_FPS = 30;
+    private static final int DEFAULT_FPS = 20;
+    private static final double BASE_HEIGHT = 680.0;
 
     private static final String PERMISSION_AUDIO = Manifest.permission.RECORD_AUDIO;
     private static final String PERMISSION_VIDEO = Manifest.permission.CAMERA;
@@ -517,8 +518,21 @@ class GetUserMediaImpl {
                                 (WindowManager) applicationContext.getSystemService(Context.WINDOW_SERVICE);
 
                         VideoCapturerInfo info = new VideoCapturerInfo();
-                        info.width = wm.getDefaultDisplay().getWidth();
-                        info.height = wm.getDefaultDisplay().getHeight();
+                        //高さを取得する
+                        double height = (double)wm.getDefaultDisplay().getHeight();
+                        if (BASE_HEIGHT < height) {
+                            //基準の高さ以上のため縮小させる
+                            //ベースの高さから実際の高さとの割合を取得する
+                            double heightRatio = BASE_HEIGHT / height;
+                            //高さはベースのものをそのまま
+                            info.height = (int)BASE_HEIGHT;
+                            //取得した割合を使って横幅を計算
+                            info.width = (int)(wm.getDefaultDisplay().getWidth() * heightRatio);
+                        }else{
+                            //基準の高さ以下なので、そのままのサイズ
+                            info.height = height;
+                            info.width = wm.getDefaultDisplay().getWidth();
+                        }
                         info.fps = DEFAULT_FPS;
                         info.isScreenCapture = true;
                         info.capturer = videoCapturer;
