@@ -97,6 +97,9 @@ class GetUserMediaImpl {
     private static final String PROJECTION_DATA = "PROJECTION_DATA";
     private static final String RESULT_RECEIVER = "RESULT_RECEIVER";
     private static final String REQUEST_CODE = "REQUEST_CODE";
+    //権限パーミッションの結果を保持する
+    private static Intent staticIntentData;
+    private static int staticResultCode;
 
     static final String TAG = FlutterWebRTCPlugin.TAG;
 
@@ -147,7 +150,17 @@ class GetUserMediaImpl {
         private final int resultCode = 0;
 
         private void checkSelfPermissions(boolean requestPermissions) {
-            if (resultCode != Activity.RESULT_OK) {
+            if(staticIntentData != null){
+                Activity activity = this.getActivity();
+                Bundle args = getArguments();
+                resultReceiver = args.getParcelable(RESULT_RECEIVER);
+                Bundle resultData = new Bundle();
+                resultData.putString(PERMISSIONS, PERMISSION_SCREEN);
+                resultData.putInt(GRANT_RESULTS, staticResultCode);
+                resultData.putParcelable(PROJECTION_DATA, staticIntentData);
+                resultReceiver.send(requestCode, resultData);
+                finish();
+            } else if (resultCode != Activity.RESULT_OK) {
                 Activity activity = this.getActivity();
                 Bundle args = getArguments();
                 resultReceiver = args.getParcelable(RESULT_RECEIVER);
@@ -190,6 +203,8 @@ class GetUserMediaImpl {
             resultData.putInt(GRANT_RESULTS, resultCode);
             resultData.putParcelable(PROJECTION_DATA, data);
             resultReceiver.send(requestCode, resultData);
+            staticResultCode = resultCode;
+            staticIntentData = data;
             finish();
         }
 
