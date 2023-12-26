@@ -557,6 +557,7 @@ class GetUserMediaImpl {
 
                         String trackId = stateProvider.getNextTrackUUID();
                         mVideoCapturers.put(trackId, info);
+                        mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
 
                         tracks[0] = pcFactory.createVideoTrack(trackId, videoSource);
 
