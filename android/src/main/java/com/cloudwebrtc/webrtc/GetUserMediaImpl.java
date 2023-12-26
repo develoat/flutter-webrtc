@@ -832,7 +832,7 @@ class GetUserMediaImpl {
                     mVideoCapturers.remove(id);
                     SurfaceTextureHelper helper = mSurfaceTextureHelpers.get(id);
                     if (helper != null)  {
-                        Log.d(TAG, "surfaceTextureHelper dispose: " + id + "(user)");
+                        Log.d(TAG, "surfaceTextureHelper dispose: " + id);
                         helper.stopListening();
                         helper.dispose();
                         mSurfaceTextureHelpers.remove(id);
