@@ -556,7 +556,9 @@ class GetUserMediaImpl {
                         Log.d(TAG, "OrientationAwareScreenCapturer.startCapture: " + info.width + "x" + info.height + "@" + info.fps);
 
                         String trackId = stateProvider.getNextTrackUUID();
+                        Log.d(TAG, "surfaceTextureHelper put: " + trackId + "(display)");
                         mVideoCapturers.put(trackId, info);
+                        mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
 
                         tracks[0] = pcFactory.createVideoTrack(trackId, videoSource);
 
@@ -785,6 +787,7 @@ class GetUserMediaImpl {
         videoCapturer.startCapture(info.width, info.height, info.fps);
 
         String trackId = stateProvider.getNextTrackUUID();
+        Log.d(TAG, "surfaceTextureHelper put: " + trackId + "(user)");
         mVideoCapturers.put(trackId, info);
         mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
         Log.d(TAG, "changeCaptureFormat: " + info.width + "x" + info.height + "@" + info.fps);
@@ -829,6 +832,7 @@ class GetUserMediaImpl {
                     mVideoCapturers.remove(id);
                     SurfaceTextureHelper helper = mSurfaceTextureHelpers.get(id);
                     if (helper != null)  {
+                        Log.d(TAG, "surfaceTextureHelper dispose: " + id);
                         helper.stopListening();
                         helper.dispose();
                         mSurfaceTextureHelpers.remove(id);
