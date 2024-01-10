@@ -620,7 +620,7 @@ NSArray<RTC_OBJC_TYPE(RTCVideoCodecInfo) *>* motifyH264ProfileLevelId(
     }
     [_localTracks removeObjectForKey:trackId];
     if (audioTrack) {
-      [self ensureAudioSession];
+      // [self ensureAudioSession];
     }
     result(nil);
   } else if ([@"restartIce" isEqualToString:call.method]) {
