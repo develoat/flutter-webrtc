@@ -23,6 +23,7 @@ import kotlin.Unit;
 import kotlin.jvm.functions.Function2;
 
 public class AudioSwitchManager {
+    static public final String NEXTAG = "NexWebRTCPlugin";
     @SuppressLint("StaticFieldLeak")
     public static AudioSwitchManager instance;
     @NonNull
@@ -50,6 +51,9 @@ public class AudioSwitchManager {
     @Nullable
     private AudioSwitch audioSwitch;
 
+    private int focusMode = AudioManager.AUDIOFOCUS_GAIN;
+    private int audioMode = AudioManager.MODE_IN_COMMUNICATION;
+
     public AudioSwitchManager(@NonNull Context context) {
         this.context = context;
         this.audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
@@ -64,6 +68,7 @@ public class AudioSwitchManager {
 
     private void initAudioSwitch() {
         if (audioSwitch == null) {
+            loggingEnabled = true;
             handler.removeCallbacksAndMessages(null);
             handler.postAtFrontOfQueue(() -> {
                 audioSwitch = new AudioSwitch(
@@ -72,6 +77,8 @@ public class AudioSwitchManager {
                         audioFocusChangeListener,
                         preferredDeviceList
                 );
+                audioSwitch.setFocusMode(focusMode);
+                audioSwitch.setAudioMode(audioMode);
                 audioSwitch.start(audioDeviceChangeListener);
             });
         }
@@ -79,11 +86,15 @@ public class AudioSwitchManager {
 
     public void start() {
         if (audioSwitch != null) {
+            Log.d(NEXTAG, "AudioSwitchManager start()");
             handler.removeCallbacksAndMessages(null);
             handler.postAtFrontOfQueue(() -> {
                 if (!isActive) {
+                    Log.d(NEXTAG, "AudioSwitchManager activate()");
                     Objects.requireNonNull(audioSwitch).activate();
                     isActive = true;
+                } else {
+                    Log.d(NEXTAG, "AudioSwitchManager activate() alraedy active");
                 }
             });
         }
@@ -91,11 +102,39 @@ public class AudioSwitchManager {
 
     public void stop() {
         if (audioSwitch != null) {
+            Log.d(NEXTAG, "AudioSwitchManager stop()");
             handler.removeCallbacksAndMessages(null);
             handler.postAtFrontOfQueue(() -> {
                 if (isActive) {
+                    Log.d(NEXTAG, "AudioSwitchManager deactivate()");
                     Objects.requireNonNull(audioSwitch).deactivate();
                     isActive = false;
+                } else {
+                    Log.d(NEXTAG, "AudioSwitchManager deactivate() alraedy inactive");
+                }
+            });
+        }
+    }
+
+    public void reStart() {
+        if (audioSwitch != null) {
+            Log.d(NEXTAG, "AudioSwitchManager reStart()");
+            handler.removeCallbacksAndMessages(null);
+            handler.postAtFrontOfQueue(() -> {
+                if (isActive) {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:deactivate()");
+                    Objects.requireNonNull(audioSwitch).deactivate();
+                    isActive = false;
+                } else {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:deactivate() alraedy inactive");
+                }
+
+                if (!isActive) {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:activate()");
+                    Objects.requireNonNull(audioSwitch).activate();
+                    isActive = true;
+                } else {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:activate() alraedy active");
                 }
             });
         }
@@ -113,6 +152,14 @@ public class AudioSwitchManager {
     @NonNull
     public List<AudioDevice> availableAudioDevices() {
         return Objects.requireNonNull(audioSwitch).getAvailableAudioDevices();
+    }
+
+    public boolean isFocusGain(int focusChange){
+        return (focusChange == audioManager.AUDIOFOCUS_GAIN);
+    }
+
+    public boolean isFocusLoss(int focusChange){
+        return (focusChange == audioManager.AUDIOFOCUS_LOSS_TRANSIENT || focusChange == audioManager.AUDIOFOCUS_LOSS);
     }
 
     public void selectAudioOutput(@NonNull Class<? extends AudioDevice> audioDeviceClass) {

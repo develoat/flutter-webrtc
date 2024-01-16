@@ -88,6 +88,7 @@ import io.flutter.view.TextureRegistry.SurfaceTextureEntry;
 
 public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
   static public final String TAG = "FlutterWebRTCPlugin";
+  static public final String NEXTAG = "NexWebRTCPlugin";
 
   private final Map<String, PeerConnectionObserver> mPeerConnectionObservers = new HashMap<>();
   private final BinaryMessenger messenger;
@@ -188,6 +189,29 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         break;
       }
       case "getUserMedia": {
+        AudioSwitchManager.instance = new AudioSwitchManager(context);
+        AudioSwitchManager.instance.audioDeviceChangeListener = (devices, currentDevice) -> {
+            Log.w(TAG, "audioFocusChangeListener " + devices+ " " + currentDevice);
+            sendLog("audioDeviceChangeListener devices��"  + devices+ " currentDevice��" + currentDevice);
+            // ConstraintsMap params = new ConstraintsMap();
+            // params.putString("event", "onDeviceChange");
+            // sendEvent(params.toMap());
+            return null;
+        };
+        AudioSwitchManager.instance.audioFocusChangeListener = (focusChange) -> {
+          sendLog("audioFocusChangeListener focusChange" + focusChange + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
+          if (AudioSwitchManager.instance.isFocusGain(focusChange)) { 
+            //AUDIOFOCUS_GAIN (�t�H�[�J�X���A��)
+            sendLog("AUDIOFOCUS_GAIN beforeRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
+            //AudioSwitch���ċN������
+            AudioSwitchManager.instance.reStart();
+            // AudioSwitchManager.instance.selectAudioOutput(AudioDeviceKind.fromTypeName("0"));
+            sendLog("AUDIOFOCUS_GAIN afterRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
+          } else if (AudioSwitchManager.instance.isFocusLoss(focusChange)){
+            //AUDIOFOCUS_LOSS (��t�H�[�J�X��)
+            sendLog("AUDIOFOCUS_LOSS availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
+          }
+        };
         Map<String, Object> constraints = call.argument("constraints");
         ConstraintsMap constraintsMap = new ConstraintsMap(constraints);
         getUserMedia(constraintsMap, result);
@@ -391,6 +415,10 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         String peerConnectionId = call.argument("peerConnectionId");
         peerConnectionDispose(peerConnectionId);
         result.success(null);
+        if (AudioSwitchManager.instance != null) {
+          Log.d(TAG, "Stopping the audio manager...");
+          AudioSwitchManager.instance.stop();
+        }
         break;
       }
       case "createVideoRenderer": {
@@ -1278,6 +1306,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
           audio.putString("facing", "");
           audio.putString("kind", "audioinput");
           array.pushMap(audio);
+          Log.d(NEXTAG, "getSources devices��"  + devices + " constraintsMap��" + audio.toString());
         }
       }
     }
@@ -1994,5 +2023,9 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
             context,
             activity,
             permissions.toArray(new String[permissions.size()]), callback);
+  }
+
+  private void sendLog(String value){
+    Log.d(NEXTAG, value);
   }
 }
