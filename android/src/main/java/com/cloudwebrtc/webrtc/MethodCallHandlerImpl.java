@@ -179,7 +179,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     final AnyThreadResult result = new AnyThreadResult(notSafeResult);
     switch (call.method) {
       case "createPeerConnection": {
-        initAudioSwitch()
+        initAudioSwitch();
         Map<String, Object> constraints = call.argument("constraints");
         Map<String, Object> configuration = call.argument("configuration");
         String peerConnectionId = peerConnectionInit(new ConstraintsMap(configuration),
