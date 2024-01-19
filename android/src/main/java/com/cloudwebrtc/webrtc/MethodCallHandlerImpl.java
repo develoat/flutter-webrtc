@@ -179,6 +179,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     final AnyThreadResult result = new AnyThreadResult(notSafeResult);
     switch (call.method) {
       case "createPeerConnection": {
+        initAudioSwitch()
         Map<String, Object> constraints = call.argument("constraints");
         Map<String, Object> configuration = call.argument("configuration");
         String peerConnectionId = peerConnectionInit(new ConstraintsMap(configuration),
@@ -189,29 +190,6 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         break;
       }
       case "getUserMedia": {
-        AudioSwitchManager.instance = new AudioSwitchManager(context);
-        AudioSwitchManager.instance.audioDeviceChangeListener = (devices, currentDevice) -> {
-            Log.w(TAG, "audioFocusChangeListener " + devices+ " " + currentDevice);
-            sendLog("audioDeviceChangeListener devices��"  + devices+ " currentDevice��" + currentDevice);
-            // ConstraintsMap params = new ConstraintsMap();
-            // params.putString("event", "onDeviceChange");
-            // sendEvent(params.toMap());
-            return null;
-        };
-        AudioSwitchManager.instance.audioFocusChangeListener = (focusChange) -> {
-          sendLog("audioFocusChangeListener focusChange" + focusChange + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
-          if (AudioSwitchManager.instance.isFocusGain(focusChange)) { 
-            //AUDIOFOCUS_GAIN (�t�H�[�J�X���A��)
-            sendLog("AUDIOFOCUS_GAIN beforeRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
-            //AudioSwitch���ċN������
-            AudioSwitchManager.instance.reStart();
-            // AudioSwitchManager.instance.selectAudioOutput(AudioDeviceKind.fromTypeName("0"));
-            sendLog("AUDIOFOCUS_GAIN afterRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
-          } else if (AudioSwitchManager.instance.isFocusLoss(focusChange)){
-            //AUDIOFOCUS_LOSS (��t�H�[�J�X��)
-            sendLog("AUDIOFOCUS_LOSS availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
-          }
-        };
         Map<String, Object> constraints = call.argument("constraints");
         ConstraintsMap constraintsMap = new ConstraintsMap(constraints);
         getUserMedia(constraintsMap, result);
@@ -2023,6 +2001,32 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
             context,
             activity,
             permissions.toArray(new String[permissions.size()]), callback);
+  }
+
+  private void initAudioSwitch(){
+    AudioSwitchManager.instance = new AudioSwitchManager(context);
+    AudioSwitchManager.instance.audioDeviceChangeListener = (devices, currentDevice) -> {
+        Log.w(TAG, "audioFocusChangeListener " + devices+ " " + currentDevice);
+        sendLog("audioDeviceChangeListener devices"  + devices.toString() + " currentDevice" + currentDevice.toString());
+        // ConstraintsMap params = new ConstraintsMap();
+        // params.putString("event", "onDeviceChange");
+        // sendEvent(params.toMap());
+        return null;
+    };
+    AudioSwitchManager.instance.audioFocusChangeListener = (focusChange) -> {
+      sendLog("audioFocusChangeListener focusChange" + Integer.toString(focusChange) + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
+      if (AudioSwitchManager.instance.isFocusGain(focusChange)) { 
+        //AUDIOFOCUS_GAIN (フォーカス復帰時)
+        sendLog("AUDIOFOCUS_GAIN beforeRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices().toString() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+        //AudioSwitchを再起動する
+        AudioSwitchManager.instance.reStart();
+        // AudioSwitchManager.instance.selectAudioOutput(AudioDeviceKind.fromTypeName("0"));
+        sendLog("AUDIOFOCUS_GAIN afterRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices().toString() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+      } else if (AudioSwitchManager.instance.isFocusLoss(focusChange)){
+        //AUDIOFOCUS_LOSS (非フォーカス時)
+        sendLog("AUDIOFOCUS_LOSS availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices().toString() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+      }
+    };
   }
 
   private void sendLog(String value){
