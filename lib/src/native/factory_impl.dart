@@ -113,3 +113,7 @@ Navigator get navigator => RTCFactoryNative.instance.navigator;
 DesktopCapturer get desktopCapturer => DesktopCapturerNative.instance;
 
 MediaDevices get mediaDevices => MediaDeviceNative.instance;
+
+StreamController<String> get logger => MediaDeviceNative.instance.logger;
+
+StreamController<AndroidAudioFocusType?> get onAudioFocusChange => MediaDeviceNative.instance.onAudioFocusChange;

@@ -23,6 +23,7 @@ import com.cloudwebrtc.webrtc.audio.AudioSwitchManager;
 import com.cloudwebrtc.webrtc.record.AudioChannel;
 import com.cloudwebrtc.webrtc.record.FrameCapturer;
 import com.cloudwebrtc.webrtc.utils.AnyThreadResult;
+import com.cloudwebrtc.webrtc.utils.AnyThreadSink;
 import com.cloudwebrtc.webrtc.utils.Callback;
 import com.cloudwebrtc.webrtc.utils.ConstraintsArray;
 import com.cloudwebrtc.webrtc.utils.ConstraintsMap;
@@ -86,7 +87,7 @@ import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.view.TextureRegistry;
 import io.flutter.view.TextureRegistry.SurfaceTextureEntry;
 
-public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
+public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, EventChannel.StreamHandler  {
   static public final String TAG = "FlutterWebRTCPlugin";
   static public final String NEXTAG = "NexWebRTCPlugin";
 
@@ -111,10 +112,16 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
 
   private Activity activity;
 
+  private EventChannel eventChannel;
+  private EventChannel.EventSink eventSink;
+
   MethodCallHandlerImpl(Context context, BinaryMessenger messenger, TextureRegistry textureRegistry) {
     this.context = context;
     this.textures = textureRegistry;
     this.messenger = messenger;
+
+    eventChannel = new EventChannel( messenger,"FlutterWebRTC.Event");
+    eventChannel.setStreamHandler(this);
   }
 
   static private void resultError(String method, String error, Result result) {
@@ -2008,9 +2015,9 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     AudioSwitchManager.instance.audioDeviceChangeListener = (devices, currentDevice) -> {
         Log.w(TAG, "audioFocusChangeListener " + devices+ " " + currentDevice);
         sendLog("audioDeviceChangeListener devices"  + devices.toString() + " currentDevice" + currentDevice.toString());
-        // ConstraintsMap params = new ConstraintsMap();
-        // params.putString("event", "onDeviceChange");
-        // sendEvent(params.toMap());
+        ConstraintsMap params = new ConstraintsMap();
+        params.putString("event", "onDeviceChange");
+        sendEvent(params.toMap());
         return null;
     };
     AudioSwitchManager.instance.audioFocusChangeListener = (focusChange) -> {
@@ -2026,10 +2033,26 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         //AUDIOFOCUS_LOSS (非フォーカス時)
         sendLog("AUDIOFOCUS_LOSS availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices().toString() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
       }
+      onAudioFocusChange(Integer.toString(focusChange));
     };
   }
 
   private void sendLog(String value){
     Log.d(NEXTAG, value);
+    if(eventSink != null) {
+        ConstraintsMap params = new ConstraintsMap();
+        params.putString("event", "onLogger");
+        params.putString("value", value);
+        eventSink.success(params.toMap());
+    }
+  }
+
+  private void onAudioFocusChange(String value){
+    if(eventSink != null) {
+        ConstraintsMap params = new ConstraintsMap();
+        params.putString("event", "onAudioFocusChange");
+        params.putString("value", value);
+        eventSink.success(params.toMap());
+    }
   }
 }

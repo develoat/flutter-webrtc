@@ -29,3 +29,12 @@ class WebRTC {
         param,
       );
 }
+
+enum AndroidAudioFocusType {
+  AUDIOFOCUS_GAIN, //有効
+  AUDIOFOCUS_GAIN_TRANSIENT, //一時有効
+  AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK, //有効・ダッキング可能
+  AUDIOFOCUS_LOSS, //無効
+  AUDIOFOCUS_LOSS_TRANSIENT, //一時無効
+  AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK, //無効・ダッキング可能
+}
