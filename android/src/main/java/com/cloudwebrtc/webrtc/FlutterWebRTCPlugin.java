@@ -109,15 +109,15 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
         methodCallHandler = new MethodCallHandlerImpl(context, messenger, textureRegistry);
         methodChannel = new MethodChannel(messenger, "FlutterWebRTC.Method");
         methodChannel.setMethodCallHandler(methodCallHandler);
-        eventChannel = new EventChannel( messenger,"FlutterWebRTC.Event");
-        eventChannel.setStreamHandler(this);
+        // eventChannel = new EventChannel( messenger,"FlutterWebRTC.Event");
+        // eventChannel.setStreamHandler(this);
     }
 
     private void stopListening() {
         methodCallHandler.dispose();
         methodCallHandler = null;
         methodChannel.setMethodCallHandler(null);
-        eventChannel.setStreamHandler(null);
+        // eventChannel.setStreamHandler(null);
     }
 
     @Override

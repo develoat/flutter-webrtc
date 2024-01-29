@@ -144,6 +144,18 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, 
       peerConnectionDispose(connection);
     }
     mPeerConnectionObservers.clear();
+
+    eventChannel.setStreamHandler(null);
+  }
+
+  @Override
+  public void onListen(Object arguments, EventChannel.EventSink events) {
+      eventSink = new AnyThreadSink(events);
+  }
+
+  @Override
+  public void onCancel(Object arguments) {
+      eventSink = null;
   }
 
   private void ensureInitialized() {
