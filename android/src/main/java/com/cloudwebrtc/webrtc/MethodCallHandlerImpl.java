@@ -2033,19 +2033,25 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, 
         return null;
     };
     AudioSwitchManager.instance.audioFocusChangeListener = (focusChange) -> {
+      onAudioFocusChange(Integer.toString(focusChange));
       sendLog("audioFocusChangeListener focusChange" + Integer.toString(focusChange) + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
       if (AudioSwitchManager.instance.isFocusGain(focusChange)) { 
         //AUDIOFOCUS_GAIN (フォーカス復帰時)
-        sendLog("AUDIOFOCUS_GAIN beforeRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices().toString() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
-        //AudioSwitchを再起動する
-        AudioSwitchManager.instance.reStart();
+        sendLog("AUDIOFOCUS_GAIN before availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+        if(AudioSwitchManager.instance.resentFocusLoss != AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK && AudioSwitchManager.instance.resentFocusLoss != 0){
+          AudioSwitchManager.instance.resentFocusLoss = 0;
+          //Bluetoothを優先で接続する
+          AudioSwitchManager.instance.enableSpeakerButPreferBluetooth();
+        }
         // AudioSwitchManager.instance.selectAudioOutput(AudioDeviceKind.fromTypeName("0"));
-        sendLog("AUDIOFOCUS_GAIN afterRestart availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices().toString() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
-      } else if (AudioSwitchManager.instance.isFocusLoss(focusChange)){
+        sendLog("AUDIOFOCUS_GAIN after  availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+      } else if (AudioSwitchManager.instance.isFocusLoss(focusChange) && focusChange != AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK){
         //AUDIOFOCUS_LOSS (非フォーカス時)
-        sendLog("AUDIOFOCUS_LOSS availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices().toString() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+        sendLog("AUDIOFOCUS_LOSS before availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+        //非フォーカス時はEarpieceに変更し、再フォーカス時にBluetoothに接続できるようにする。
+        AudioSwitchManager.instance.selectAudioOutput(AudioDevice.Earpiece.class);
+        sendLog("AUDIOFOCUS_LOSS after  availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
       }
-      onAudioFocusChange(Integer.toString(focusChange));
     };
   }
 

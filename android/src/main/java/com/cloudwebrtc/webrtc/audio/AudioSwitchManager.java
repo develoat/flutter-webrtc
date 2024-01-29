@@ -53,6 +53,8 @@ public class AudioSwitchManager {
 
     private int focusMode = AudioManager.AUDIOFOCUS_GAIN;
     private int audioMode = AudioManager.MODE_IN_COMMUNICATION;
+    
+    public int resentFocusLoss = 0;
 
     public AudioSwitchManager(@NonNull Context context) {
         this.context = context;
@@ -155,11 +157,15 @@ public class AudioSwitchManager {
     }
 
     public boolean isFocusGain(int focusChange){
-        return (focusChange == audioManager.AUDIOFOCUS_GAIN);
+        return (focusChange == AudioManager.AUDIOFOCUS_GAIN);
     }
 
     public boolean isFocusLoss(int focusChange){
-        return (focusChange == audioManager.AUDIOFOCUS_LOSS_TRANSIENT || focusChange == audioManager.AUDIOFOCUS_LOSS);
+        if(focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT || focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK){
+            resentFocusLoss = focusChange;
+            return true;
+        }
+        return false;
     }
 
     public void selectAudioOutput(@NonNull Class<? extends AudioDevice> audioDeviceClass) {
@@ -195,6 +201,8 @@ public class AudioSwitchManager {
         }
         if (bluetoothDevice == null) {
             audioManager.setSpeakerphoneOn(true);
+        } else {
+            selectAudioOutput(AudioDevice.BluetoothHeadset.class);
         }
     }
 
