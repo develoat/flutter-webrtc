@@ -2037,6 +2037,12 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, 
     };
   }
 
+  public void sendEvent(Object event) {
+    if(eventSink != null) {
+        eventSink.success(event);
+    }
+  }
+
   private void sendLog(String value){
     Log.d(NEXTAG, value);
     if(eventSink != null) {
