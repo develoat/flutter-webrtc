@@ -50,9 +50,6 @@ public class AudioSwitchManager {
 
     @Nullable
     private AudioSwitch audioSwitch;
-
-    private int focusMode = AudioManager.AUDIOFOCUS_GAIN;
-    private int audioMode = AudioManager.MODE_IN_COMMUNICATION;
     
     public int resentFocusLoss = 0;
 
@@ -79,8 +76,6 @@ public class AudioSwitchManager {
                         audioFocusChangeListener,
                         preferredDeviceList
                 );
-                audioSwitch.setFocusMode(focusMode);
-                audioSwitch.setAudioMode(audioMode);
                 audioSwitch.start(audioDeviceChangeListener);
             });
         }
