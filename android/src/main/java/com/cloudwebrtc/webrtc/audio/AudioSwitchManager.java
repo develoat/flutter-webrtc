@@ -197,19 +197,23 @@ public class AudioSwitchManager {
 
     public void enableSpeakerButPreferBluetooth() {
         AudioDeviceInfo bluetoothDevice = null;
+        int connectedType = 0;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
             for (AudioDeviceInfo device : devices) {
+                if(connectedType == 0){
+                    connectedType = device.getType();
+                }
                 if (device.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
                     bluetoothDevice = device;
                     break;
                 }
             }
         }
-        if (bluetoothDevice == null) {
-            audioManager.setSpeakerphoneOn(true);
-        } else {
+        if (bluetoothDevice != null) {
             selectAudioOutput(AudioDevice.BluetoothHeadset.class);
+        } else if(connectedType != 0) {
+            Objects.requireNonNull(audioSwitch).activate();
         }
     }
 
