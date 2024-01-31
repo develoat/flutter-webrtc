@@ -67,9 +67,17 @@ public class AudioSwitchManager {
 
     private void initAudioSwitch() {
         if (audioSwitch == null) {
+            Log.d(NEXTAG, "AudioSwitchManager initAudioSwitch()");
             loggingEnabled = true;
             handler.removeCallbacksAndMessages(null);
-            handler.postAtFrontOfQueue(() -> {
+        }
+    }
+
+    public void start() {
+        handler.removeCallbacksAndMessages(null);
+        handler.postAtFrontOfQueue(() -> {
+            if(audioSwitch == null){
+                Log.d(NEXTAG, "AudioSwitchManager start()");
                 audioSwitch = new AudioSwitch(
                         context,
                         loggingEnabled,
@@ -77,24 +85,15 @@ public class AudioSwitchManager {
                         preferredDeviceList
                 );
                 audioSwitch.start(audioDeviceChangeListener);
-            });
-        }
-    }
-
-    public void start() {
-        if (audioSwitch != null) {
-            Log.d(NEXTAG, "AudioSwitchManager start()");
-            handler.removeCallbacksAndMessages(null);
-            handler.postAtFrontOfQueue(() -> {
-                if (!isActive) {
-                    Log.d(NEXTAG, "AudioSwitchManager activate()");
-                    Objects.requireNonNull(audioSwitch).activate();
-                    isActive = true;
-                } else {
-                    Log.d(NEXTAG, "AudioSwitchManager activate() alraedy active");
-                }
-            });
-        }
+            }
+            if (!isActive){
+                Log.d(NEXTAG, "AudioSwitchManager activate()");
+                Objects.requireNonNull(audioSwitch).activate();
+                isActive = true;
+            } else {
+                Log.d(NEXTAG, "AudioSwitchManager activate() alraedy active");
+            }
+        });
     }
 
     public void stop() {
@@ -109,6 +108,19 @@ public class AudioSwitchManager {
                 } else {
                     Log.d(NEXTAG, "AudioSwitchManager deactivate() alraedy inactive");
                 }
+            });
+        }
+    }
+
+    public void closeAudioSwitch() {
+        if (audioSwitch != null) {
+            handler.removeCallbacksAndMessages(null);
+            handler.postAtFrontOfQueue(() -> {
+                Log.d(NEXTAG, "AudioSwitchManager closeAudioSwitch()");
+                Objects.requireNonNull(audioSwitch).deactivate();
+                isActive = false;
+                Objects.requireNonNull(audioSwitch).stop();
+                audioSwitch = null;
             });
         }
     }

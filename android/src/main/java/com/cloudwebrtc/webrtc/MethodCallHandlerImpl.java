@@ -415,6 +415,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, 
         if (AudioSwitchManager.instance != null) {
           Log.d(TAG, "Stopping the audio manager...");
           AudioSwitchManager.instance.stop();
+          AudioSwitchManager.instance.closeAudioSwitch();
         }
         break;
       }
@@ -2023,7 +2024,10 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, 
   }
 
   private void initAudioSwitch(){
-    AudioSwitchManager.instance = new AudioSwitchManager(context);
+    if(AudioSwitchManager.instance == null){
+      AudioSwitchManager.instance = new AudioSwitchManager(context);
+    }
+    
     AudioSwitchManager.instance.audioDeviceChangeListener = (devices, currentDevice) -> {
         Log.w(TAG, "audioFocusChangeListener " + devices+ " " + currentDevice);
         sendLog("audioDeviceChangeListener devices"  + devices.toString() + " currentDevice" + currentDevice.toString());
