@@ -907,4 +907,39 @@ typedef void (^NavigatorUserMediaSuccessCallback)(RTCMediaStream* mediaStream);
   return fmin(maxSupportedFramerate, targetFps);
 }
 
+//露出の自動調整のオンオフ
+- (void)mediaStreamTrackSetExposure:(RTCMediaStreamTrack*)track
+                          exposure:(BOOL)exposure
+                          result:(FlutterResult)result {
+
+  if (!self.videoCapturer) {
+    NSLog(@"Video capturer is null. Can't set exposure");
+    return;
+  }
+
+  if (self.videoCapturer.captureSession.inputs.count == 0) {
+    NSLog(@"Video capturer is missing an input. Can't set exposure");
+    return;
+  }
+
+  AVCaptureDeviceInput* deviceInput = [self.videoCapturer.captureSession.inputs objectAtIndex:0];
+  AVCaptureDevice* device = deviceInput.device;
+
+  if (![device isExposureModeSupported:AVCaptureExposureModeContinuousAutoExposure]) {
+    NSLog(@"Current capture device does not support exposure. Can't set exposure");
+    return;
+  }
+
+  NSError* error;
+  if ([device lockForConfiguration:&error] == NO) {
+    NSLog(@"Failed to aquire configuration lock. %@", error.localizedDescription);
+    return;
+  }
+
+  [device setExposureMode: exposure ? AVCaptureExposureModeContinuousAutoExposure : AVCaptureExposureModeLocked]; 
+  [device unlockForConfiguration];
+
+  result(nil);
+}
+
 @end

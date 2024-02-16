@@ -1211,6 +1211,24 @@ NSArray<RTC_OBJC_TYPE(RTCVideoCodecInfo) *>* motifyH264ProfileLevelId(
   } else if ([@"getRtpSenderCapabilities" isEqualToString:call.method]) {
     NSDictionary* argsMap = call.arguments;
     [self peerConnectionGetRtpSenderCapabilities:argsMap result:result];
+  } else if ([@"mediaStreamTrackSetExposure" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSString* trackId = argsMap[@"trackId"];
+    BOOL exposure = [argsMap[@"exposure"] boolValue];
+    RTCMediaStreamTrack* track = self.localTracks[trackId];
+    if (track != nil && [track isKindOfClass:[RTCVideoTrack class]]) {
+      RTCVideoTrack* videoTrack = (RTCVideoTrack*)track;
+      [self mediaStreamTrackSetExposure:videoTrack exposure:exposure result:result];
+    } else {
+      if (track == nil) {
+        result([FlutterError errorWithCode:@"Track is nil" message:nil details:nil]);
+      } else {
+        result([FlutterError errorWithCode:[@"Track is class of "
+          stringByAppendingString:[[track class] description]]
+          message:nil
+          details:nil]);
+      }
+    }
   } else {
     [self handleFrameCryptorMethodCall:call result:result];
   }
