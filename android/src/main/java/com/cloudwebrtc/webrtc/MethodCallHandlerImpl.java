@@ -1748,6 +1748,12 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, 
       localTracks.remove(track.id());
       stream.removeTrack(track);
     }
+    try {
+        stream.dispose();
+    } catch (Exception e) {
+        //既に破棄されている場合
+        Log.e(TAG, "mediaStream is already dispose");
+    }
   }
 
   private void removeStreamForRendererById(String streamId) {
