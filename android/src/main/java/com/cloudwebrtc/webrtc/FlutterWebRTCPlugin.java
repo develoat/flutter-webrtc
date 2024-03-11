@@ -106,30 +106,18 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
 
     private void startListening(final Context context, BinaryMessenger messenger,
                                 TextureRegistry textureRegistry) {
-        AudioSwitchManager.instance = new AudioSwitchManager(context);
         methodCallHandler = new MethodCallHandlerImpl(context, messenger, textureRegistry);
         methodChannel = new MethodChannel(messenger, "FlutterWebRTC.Method");
         methodChannel.setMethodCallHandler(methodCallHandler);
-        eventChannel = new EventChannel( messenger,"FlutterWebRTC.Event");
-        eventChannel.setStreamHandler(this);
-        AudioSwitchManager.instance.audioDeviceChangeListener = (devices, currentDevice) -> {
-            Log.w(TAG, "audioFocusChangeListener " + devices+ " " + currentDevice);
-            ConstraintsMap params = new ConstraintsMap();
-            params.putString("event", "onDeviceChange");
-            sendEvent(params.toMap());
-            return null;
-        };
+        // eventChannel = new EventChannel( messenger,"FlutterWebRTC.Event");
+        // eventChannel.setStreamHandler(this);
     }
 
     private void stopListening() {
         methodCallHandler.dispose();
         methodCallHandler = null;
         methodChannel.setMethodCallHandler(null);
-        eventChannel.setStreamHandler(null);
-        if (AudioSwitchManager.instance != null) {
-            Log.d(TAG, "Stopping the audio manager...");
-            AudioSwitchManager.instance.stop();
-        }
+        // eventChannel.setStreamHandler(null);
     }
 
     @Override

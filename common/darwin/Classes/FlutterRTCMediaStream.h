@@ -28,4 +28,9 @@
 - (void)selectAudioInput:(NSString*)deviceId result:(FlutterResult)result;
 
 - (void)selectAudioOutput:(NSString*)deviceId result:(FlutterResult)result;
+
+- (void)mediaStreamTrackSetExposure:(RTCMediaStreamTrack*)track
+                          exposure:(BOOL)exposure
+                          result:(FlutterResult)result;
+
 @end

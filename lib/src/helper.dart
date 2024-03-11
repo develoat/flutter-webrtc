@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -158,5 +160,21 @@ class Helper {
       }
     }
     track.enabled = !mute;
+  }
+
+  static Future<void> setAutoExposure(bool exposure, MediaStreamTrack track) async {
+    if (track.kind != 'video') {
+      throw 'The is not an video track => $track';
+    }
+    if (Platform.isIOS) {
+      await WebRTC.invokeMethod('mediaStreamTrackSetExposure', <String, dynamic>{
+        'trackId': track.id,
+        'exposure': exposure,
+      });
+    } else {
+      throw UnimplementedError();
+    }
+
+    return Future.value();
   }
 }

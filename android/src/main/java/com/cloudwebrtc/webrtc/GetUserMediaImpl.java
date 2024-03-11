@@ -62,6 +62,7 @@ import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
 import org.webrtc.MediaStreamTrack;
 import org.webrtc.PeerConnectionFactory;
+import org.webrtc.ScreenCapturerAndroid;
 import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.VideoCapturer;
 import org.webrtc.VideoSource;
@@ -85,7 +86,8 @@ class GetUserMediaImpl {
 
     private static final int DEFAULT_WIDTH = 1280;
     private static final int DEFAULT_HEIGHT = 720;
-    private static final int DEFAULT_FPS = 30;
+    private static final int DEFAULT_FPS = 20;
+    private static final double BASE_HEIGHT = 680.0;
 
     private static final String PERMISSION_AUDIO = Manifest.permission.RECORD_AUDIO;
     private static final String PERMISSION_VIDEO = Manifest.permission.CAMERA;
@@ -488,7 +490,7 @@ class GetUserMediaImpl {
                         MediaStreamTrack[] tracks = new MediaStreamTrack[1];
                         VideoCapturer videoCapturer = null;
                         videoCapturer =
-                                new OrientationAwareScreenCapturer(
+                                new ScreenCapturerAndroid(
                                         mediaProjectionData,
                                         new MediaProjection.Callback() {
                                             @Override
@@ -517,17 +519,32 @@ class GetUserMediaImpl {
                                 (WindowManager) applicationContext.getSystemService(Context.WINDOW_SERVICE);
 
                         VideoCapturerInfo info = new VideoCapturerInfo();
-                        info.width = wm.getDefaultDisplay().getWidth();
-                        info.height = wm.getDefaultDisplay().getHeight();
+                        //高さを取得する
+                        double height = (double)wm.getDefaultDisplay().getHeight();
+                        if (BASE_HEIGHT < height) {
+                            //基準の高さ以上のため縮小させる
+                            //ベースの高さから実際の高さとの割合を取得する
+                            double heightRatio = BASE_HEIGHT / height;
+                            //高さはベースのものをそのまま
+                            info.height = (int)BASE_HEIGHT;
+                            //取得した割合を使って横幅を計算
+                            info.width = (int)(wm.getDefaultDisplay().getWidth() * heightRatio);
+                        }else{
+                            //基準の高さ以下なので、そのままのサイズ
+                            info.height = (int)height;
+                            info.width = wm.getDefaultDisplay().getWidth();
+                        }
                         info.fps = DEFAULT_FPS;
                         info.isScreenCapture = true;
                         info.capturer = videoCapturer;
 
                         videoCapturer.startCapture(info.width, info.height, info.fps);
-                        Log.d(TAG, "OrientationAwareScreenCapturer.startCapture: " + info.width + "x" + info.height + "@" + info.fps);
+                        Log.d(TAG, "ScreenCapturerAndroid.startCapture: " + info.width + "x" + info.height + "@" + info.fps);
 
                         String trackId = stateProvider.getNextTrackUUID();
+                        Log.d(TAG, "surfaceTextureHelper put: " + trackId + "(display)");
                         mVideoCapturers.put(trackId, info);
+                        mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
 
                         tracks[0] = pcFactory.createVideoTrack(trackId, videoSource);
 
@@ -756,6 +773,7 @@ class GetUserMediaImpl {
         videoCapturer.startCapture(info.width, info.height, info.fps);
 
         String trackId = stateProvider.getNextTrackUUID();
+        Log.d(TAG, "surfaceTextureHelper put: " + trackId + "(user)");
         mVideoCapturers.put(trackId, info);
         mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
         Log.d(TAG, "changeCaptureFormat: " + info.width + "x" + info.height + "@" + info.fps);
@@ -800,6 +818,7 @@ class GetUserMediaImpl {
                     mVideoCapturers.remove(id);
                     SurfaceTextureHelper helper = mSurfaceTextureHelpers.get(id);
                     if (helper != null)  {
+                        Log.d(TAG, "surfaceTextureHelper dispose: " + id);
                         helper.stopListening();
                         helper.dispose();
                         mSurfaceTextureHelpers.remove(id);

@@ -23,6 +23,7 @@ import kotlin.Unit;
 import kotlin.jvm.functions.Function2;
 
 public class AudioSwitchManager {
+    static public final String NEXTAG = "NexWebRTCPlugin";
     @SuppressLint("StaticFieldLeak")
     public static AudioSwitchManager instance;
     @NonNull
@@ -49,6 +50,8 @@ public class AudioSwitchManager {
 
     @Nullable
     private AudioSwitch audioSwitch;
+    
+    public int resentFocusLoss = 0;
 
     public AudioSwitchManager(@NonNull Context context) {
         this.context = context;
@@ -64,8 +67,17 @@ public class AudioSwitchManager {
 
     private void initAudioSwitch() {
         if (audioSwitch == null) {
+            Log.d(NEXTAG, "AudioSwitchManager initAudioSwitch()");
+            loggingEnabled = true;
             handler.removeCallbacksAndMessages(null);
-            handler.postAtFrontOfQueue(() -> {
+        }
+    }
+
+    public void start() {
+        handler.removeCallbacksAndMessages(null);
+        handler.postAtFrontOfQueue(() -> {
+            if(audioSwitch == null){
+                Log.d(NEXTAG, "AudioSwitchManager start()");
                 audioSwitch = new AudioSwitch(
                         context,
                         loggingEnabled,
@@ -73,29 +85,65 @@ public class AudioSwitchManager {
                         preferredDeviceList
                 );
                 audioSwitch.start(audioDeviceChangeListener);
-            });
-        }
+            }
+            if (!isActive){
+                Log.d(NEXTAG, "AudioSwitchManager activate()");
+                Objects.requireNonNull(audioSwitch).activate();
+                isActive = true;
+            } else {
+                Log.d(NEXTAG, "AudioSwitchManager activate() alraedy active");
+            }
+        });
     }
 
-    public void start() {
+    public void stop() {
         if (audioSwitch != null) {
+            Log.d(NEXTAG, "AudioSwitchManager stop()");
             handler.removeCallbacksAndMessages(null);
             handler.postAtFrontOfQueue(() -> {
-                if (!isActive) {
-                    Objects.requireNonNull(audioSwitch).activate();
-                    isActive = true;
+                if (isActive) {
+                    Log.d(NEXTAG, "AudioSwitchManager deactivate()");
+                    Objects.requireNonNull(audioSwitch).deactivate();
+                    isActive = false;
+                } else {
+                    Log.d(NEXTAG, "AudioSwitchManager deactivate() alraedy inactive");
                 }
             });
         }
     }
 
-    public void stop() {
+    public void closeAudioSwitch() {
         if (audioSwitch != null) {
             handler.removeCallbacksAndMessages(null);
             handler.postAtFrontOfQueue(() -> {
+                Log.d(NEXTAG, "AudioSwitchManager closeAudioSwitch()");
+                Objects.requireNonNull(audioSwitch).deactivate();
+                isActive = false;
+                Objects.requireNonNull(audioSwitch).stop();
+                audioSwitch = null;
+            });
+        }
+    }
+
+    public void reStart() {
+        if (audioSwitch != null) {
+            Log.d(NEXTAG, "AudioSwitchManager reStart()");
+            handler.removeCallbacksAndMessages(null);
+            handler.postAtFrontOfQueue(() -> {
                 if (isActive) {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:deactivate()");
                     Objects.requireNonNull(audioSwitch).deactivate();
                     isActive = false;
+                } else {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:deactivate() alraedy inactive");
+                }
+
+                if (!isActive) {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:activate()");
+                    Objects.requireNonNull(audioSwitch).activate();
+                    isActive = true;
+                } else {
+                    Log.d(NEXTAG, "AudioSwitchManager reStart:activate() alraedy active");
                 }
             });
         }
@@ -113,6 +161,18 @@ public class AudioSwitchManager {
     @NonNull
     public List<AudioDevice> availableAudioDevices() {
         return Objects.requireNonNull(audioSwitch).getAvailableAudioDevices();
+    }
+
+    public boolean isFocusGain(int focusChange){
+        return (focusChange == AudioManager.AUDIOFOCUS_GAIN);
+    }
+
+    public boolean isFocusLoss(int focusChange){
+        if(focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT || focusChange == AudioManager.AUDIOFOCUS_LOSS || focusChange == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK){
+            resentFocusLoss = focusChange;
+            return true;
+        }
+        return false;
     }
 
     public void selectAudioOutput(@NonNull Class<? extends AudioDevice> audioDeviceClass) {
@@ -137,17 +197,23 @@ public class AudioSwitchManager {
 
     public void enableSpeakerButPreferBluetooth() {
         AudioDeviceInfo bluetoothDevice = null;
+        int connectedType = 0;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
             AudioDeviceInfo[] devices = audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
             for (AudioDeviceInfo device : devices) {
+                if(connectedType == 0){
+                    connectedType = device.getType();
+                }
                 if (device.getType() == AudioDeviceInfo.TYPE_BLUETOOTH_SCO) {
                     bluetoothDevice = device;
                     break;
                 }
             }
         }
-        if (bluetoothDevice == null) {
-            audioManager.setSpeakerphoneOn(true);
+        if (bluetoothDevice != null) {
+            selectAudioOutput(AudioDevice.BluetoothHeadset.class);
+        } else if(connectedType != 0) {
+            Objects.requireNonNull(audioSwitch).activate();
         }
     }
 
