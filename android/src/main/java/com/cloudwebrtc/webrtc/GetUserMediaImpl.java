@@ -18,6 +18,7 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.media.AudioDeviceInfo;
 import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionConfig;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.os.Build.VERSION;
@@ -167,9 +168,16 @@ class GetUserMediaImpl {
                 MediaProjectionManager mediaProjectionManager =
                         (MediaProjectionManager) activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
 
-                // call for the projection manager
-                this.startActivityForResult(
-                        mediaProjectionManager.createScreenCaptureIntent(), requestCode);
+                if(VERSION.SDK_INT >= VERSION_CODES.UPSIDE_DOWN_CAKE){
+                    this.startActivityForResult(
+                            mediaProjectionManager.createScreenCaptureIntent(
+                                    MediaProjectionConfig.createConfigForDefaultDisplay()
+                            ), requestCode);
+                }else {
+                    this.startActivityForResult(
+                            mediaProjectionManager.createScreenCaptureIntent(), requestCode);
+                }
+
             }
         }
 
