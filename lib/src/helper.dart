@@ -177,4 +177,12 @@ class Helper {
 
     return Future.value();
   }
+
+  static Future<bool> requestCapturePermission() async {
+    if (Platform.isAndroid) {
+      return await WebRTC.invokeMethod('requestCapturePermission');
+    } else {
+      throw UnimplementedError();
+    }
+  }
 }
