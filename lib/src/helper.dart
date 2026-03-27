@@ -210,36 +210,4 @@ class Helper {
 
     return Future.value();
   }
-
-  static Future<bool> requestCapturePermission() async {
-    if (Platform.isAndroid) {
-      return await WebRTC.invokeMethod('requestCapturePermission');
-    } else {
-      throw UnimplementedError();
-    }
-  }
-
-  static Future<void> setAutoExposure(bool exposure, MediaStreamTrack track) async {
-    if (track.kind != 'video') {
-      throw 'The is not an video track => $track';
-    }
-    if (Platform.isIOS) {
-      await WebRTC.invokeMethod('mediaStreamTrackSetExposure', <String, dynamic>{
-        'trackId': track.id,
-        'exposure': exposure,
-      });
-    } else {
-      throw UnimplementedError();
-    }
-
-    return Future.value();
-  }
-
-  static Future<bool> requestCapturePermission() async {
-    if (Platform.isAndroid) {
-      return await WebRTC.invokeMethod('requestCapturePermission');
-    } else {
-      throw UnimplementedError();
-    }
-  }
 }

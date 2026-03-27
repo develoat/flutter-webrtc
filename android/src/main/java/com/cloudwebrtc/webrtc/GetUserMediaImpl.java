@@ -239,22 +239,6 @@ public class GetUserMediaImpl {
         }
     }
 
-    public void requestCapturePermission(final Result result) {
-        screenRequestPermissions(
-                new ResultReceiver(new Handler(Looper.getMainLooper())) {
-                    @Override
-                    protected void onReceiveResult(int requestCode, Bundle resultData) {
-                        int resultCode = resultData.getInt(GRANT_RESULTS);
-                        if (resultCode == Activity.RESULT_OK) {
-                            mediaProjectionData = resultData.getParcelable(PROJECTION_DATA);
-                            result.success(true);
-                        } else {
-                            result.success(false);
-                        }
-                    }
-                });
-    }
-
     GetUserMediaImpl(StateProvider stateProvider, Context applicationContext) {
         this.stateProvider = stateProvider;
         this.applicationContext = applicationContext;
