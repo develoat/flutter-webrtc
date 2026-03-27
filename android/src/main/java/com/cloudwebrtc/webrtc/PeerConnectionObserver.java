@@ -8,6 +8,7 @@ import com.cloudwebrtc.webrtc.audio.AudioSwitchManager;
 import com.cloudwebrtc.webrtc.utils.AnyThreadSink;
 import com.cloudwebrtc.webrtc.utils.ConstraintsArray;
 import com.cloudwebrtc.webrtc.utils.ConstraintsMap;
+import com.cloudwebrtc.webrtc.utils.Utils;
 
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
@@ -24,6 +25,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import org.webrtc.AudioTrack;
@@ -34,6 +36,7 @@ import org.webrtc.IceCandidate;
 import org.webrtc.MediaStream;
 import org.webrtc.MediaStreamTrack;
 import org.webrtc.PeerConnection;
+import org.webrtc.Priority;
 import org.webrtc.RTCStats;
 import org.webrtc.RTCStatsReport;
 import org.webrtc.RtpCapabilities;
@@ -83,7 +86,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
     eventSink = null;
   }
 
-  PeerConnection getPeerConnection() {
+  public PeerConnection getPeerConnection() {
     return peerConnection;
   }
 
@@ -164,6 +167,18 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
       dataChannel.send(buffer);
     } else {
       Log.d(TAG, "dataChannelSend() dataChannel is null");
+    }
+  }
+
+  void dataChannelGetBufferedAmount(String dataChannelId, Result result) {
+    DataChannel dataChannel = dataChannels.get(dataChannelId);
+    if (dataChannel != null) {
+      ConstraintsMap params = new ConstraintsMap();
+      params.putLong("bufferedAmount", dataChannel.bufferedAmount());
+      result.success(params.toMap());
+    } else {
+      Log.d(TAG, "dataChannelGetBufferedAmount() dataChannel is null");
+      resultError("dataChannelGetBufferedAmount", "DataChannel is null", result);
     }
   }
 
@@ -288,9 +303,9 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
       }
     }
     if (sender != null) {
-      peerConnection.getStats(rtcStatsReport -> handleStatsReport(rtcStatsReport, result), sender);
+      peerConnection.getStats(sender, rtcStatsReport -> handleStatsReport(rtcStatsReport, result));
     } else if (receiver != null) {
-      peerConnection.getStats(rtcStatsReport -> handleStatsReport(rtcStatsReport, result), receiver);
+      peerConnection.getStats(receiver, rtcStatsReport -> handleStatsReport(rtcStatsReport, result));
     } else {
       resultError("peerConnectionGetStats", "MediaStreamTrack not found for id: " + trackId, result);
     }
@@ -333,7 +348,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
   public void onIceConnectionChange(PeerConnection.IceConnectionState iceConnectionState) {
     ConstraintsMap params = new ConstraintsMap();
     params.putString("event", "iceConnectionState");
-    params.putString("state", iceConnectionStateString(iceConnectionState));
+    params.putString("state", Utils.iceConnectionStateString(iceConnectionState));
     sendEvent(params);
   }
 
@@ -351,7 +366,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
     Log.d(TAG, "onIceGatheringChange" + iceGatheringState.name());
     ConstraintsMap params = new ConstraintsMap();
     params.putString("event", "iceGatheringState");
-    params.putString("state", iceGatheringStateString(iceGatheringState));
+    params.putString("state", Utils.iceGatheringStateString(iceGatheringState));
     sendEvent(params);
   }
 
@@ -510,6 +525,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
           String transceiverId = transceiver.getMid();
           if (null == transceiverId) {
             transceiverId = stateProvider.getNextStreamUUID();
+            this.transceivers.put(transceiverId,transceiver);
           }
           params.putMap("transceiver", transceiverToMap(transceiverId, transceiver));
         }
@@ -572,7 +588,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
   public void onSignalingChange(PeerConnection.SignalingState signalingState) {
     ConstraintsMap params = new ConstraintsMap();
     params.putString("event", "signalingState");
-    params.putString("state", signalingStateString(signalingState));
+    params.putString("state", Utils.signalingStateString(signalingState));
     sendEvent(params);
   }
 
@@ -581,80 +597,8 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
     Log.d(TAG, "onConnectionChange" + connectionState.name());
     ConstraintsMap params = new ConstraintsMap();
     params.putString("event", "peerConnectionState");
-    params.putString("state", connectionStateString(connectionState));
+    params.putString("state", Utils.connectionStateString(connectionState));
     sendEvent(params);
-  }
-
-  @Nullable
-  private String iceConnectionStateString(PeerConnection.IceConnectionState iceConnectionState) {
-    switch (iceConnectionState) {
-      case NEW:
-        return "new";
-      case CHECKING:
-        return "checking";
-      case CONNECTED:
-        return "connected";
-      case COMPLETED:
-        return "completed";
-      case FAILED:
-        return "failed";
-      case DISCONNECTED:
-        return "disconnected";
-      case CLOSED:
-        return "closed";
-    }
-    return null;
-  }
-
-  @Nullable
-  private String iceGatheringStateString(PeerConnection.IceGatheringState iceGatheringState) {
-    switch (iceGatheringState) {
-      case NEW:
-        return "new";
-      case GATHERING:
-        return "gathering";
-      case COMPLETE:
-        return "complete";
-    }
-    return null;
-  }
-
-  @Nullable
-  private String signalingStateString(PeerConnection.SignalingState signalingState) {
-    switch (signalingState) {
-      case STABLE:
-        return "stable";
-      case HAVE_LOCAL_OFFER:
-        return "have-local-offer";
-      case HAVE_LOCAL_PRANSWER:
-        return "have-local-pranswer";
-      case HAVE_REMOTE_OFFER:
-        return "have-remote-offer";
-      case HAVE_REMOTE_PRANSWER:
-        return "have-remote-pranswer";
-      case CLOSED:
-        return "closed";
-    }
-    return null;
-  }
-
-  @Nullable
-  private String connectionStateString(PeerConnection.PeerConnectionState connectionState) {
-    switch (connectionState) {
-      case NEW:
-        return "new";
-      case CONNECTING:
-        return "connecting";
-      case CONNECTED:
-        return "connected";
-      case DISCONNECTED:
-        return "disconnected";
-      case FAILED:
-        return "failed";
-      case CLOSED:
-        return "closed";
-    }
-    return null;
   }
 
   @Nullable
@@ -699,6 +643,64 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
     return type;
   }
 
+  private int stringToPriority(String priority) {
+    if (priority == null) return Priority.LOW;
+    switch (priority) {
+      case "very-low":
+        return Priority.VERY_LOW;
+      case "low":
+        return Priority.LOW;
+      case "medium":
+        return Priority.MEDIUM;
+      case "high":
+        return Priority.HIGH;
+      default:
+        return Priority.LOW;
+    }
+  }
+
+  private String priorityToString(int priority) {
+    switch (priority) {
+      case Priority.VERY_LOW:
+        return "very-low";
+      case Priority.LOW:
+        return "low";
+      case Priority.MEDIUM:
+        return "medium";
+      case Priority.HIGH:
+        return "high";
+      default:
+        return "low";
+    }
+  }
+
+  private double stringToBitratePriority(String priority) {
+    if (priority == null) return 1.0;
+    switch (priority) {
+      case "very-low":
+        return 0.5;
+      case "low":
+        return 1.0;
+      case "medium":
+        return 2.0;
+      case "high":
+        return 4.0;
+      default:
+        return 1.0;
+    }
+  }
+
+  private String bitratePriorityToString(double bitratePriority) {
+    if (bitratePriority <= 0.5) {
+      return "very-low";
+    } else if (bitratePriority <= 1.0) {
+      return "low";
+    } else if (bitratePriority <= 2.0) {
+      return "medium";
+    }
+    return "high";
+  }
+
   private RtpParameters.Encoding mapToEncoding(Map<String, Object> parameters) {
     RtpParameters.Encoding encoding = new RtpParameters.Encoding((String) parameters.get("rid"), true, 1.0);
 
@@ -730,6 +732,18 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
       encoding.scaleResolutionDownBy = (Double) parameters.get("scaleResolutionDownBy");
     }
 
+    if (parameters.get("scalabilityMode") != null) {
+      encoding.scalabilityMode = (String) parameters.get("scalabilityMode");
+    }
+
+    if (parameters.get("priority") != null) {
+      encoding.bitratePriority = stringToBitratePriority((String) parameters.get("priority"));
+    }
+
+    if (parameters.get("networkPriority") != null) {
+      encoding.networkPriority = stringToPriority((String) parameters.get("networkPriority"));
+    }
+
     return encoding;
   }
 
@@ -751,7 +765,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
     if (encodingsParams != null) {
       for (int i = 0; i < encodingsParams.size(); i++) {
         Map<String, Object> params = encodingsParams.get(i);
-        sendEncodings.add(0, mapToEncoding(params));
+        sendEncodings.add(mapToEncoding(params));
       }
       init = new RtpTransceiver.RtpTransceiverInit(stringToTransceiverDirection(direction), streamIds, sendEncodings);
     } else {
@@ -768,7 +782,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
 
     String degradationPreference = (String) newParameters.get("degradationPreference");
     if (degradationPreference != null) {
-      parameters.degradationPreference = RtpParameters.DegradationPreference.valueOf(degradationPreference.toUpperCase().replace("-", "_"));
+      parameters.degradationPreference = RtpParameters.DegradationPreference.valueOf(degradationPreference.toUpperCase(Locale.US).replace("-", "_"));
     }
 
     for (Map<String, Object> encoding : encodings) {
@@ -807,6 +821,15 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
         Double scaleResolutionDownBy = (Double) encoding.get("scaleResolutionDownBy");
         if (scaleResolutionDownBy != null)
           currentParams.scaleResolutionDownBy = scaleResolutionDownBy;
+        String scalabilityMode = (String) encoding.get("scalabilityMode");
+        if (scalabilityMode != null)
+          currentParams.scalabilityMode = scalabilityMode;
+        String priority = (String) encoding.get("priority");
+        if (priority != null)
+          currentParams.bitratePriority = stringToBitratePriority(priority);
+        String networkPriority = (String) encoding.get("networkPriority");
+        if (networkPriority != null)
+          currentParams.networkPriority = stringToPriority(networkPriority);
       }
     }
 
@@ -859,6 +882,11 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
       if (encoding.ssrc != null) {
         map.putLong("ssrc", encoding.ssrc);
       }
+      if (encoding.scalabilityMode != null) {
+        map.putString("scalabilityMode", encoding.scalabilityMode);
+      }
+      map.putString("priority", bitratePriorityToString(encoding.bitratePriority));
+      map.putString("networkPriority", priorityToString(encoding.networkPriority));
       encodings.pushMap(map);
     }
     info.putArray("encodings", encodings.toArrayList());
@@ -1053,7 +1081,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
             codecCapability.clockRate = (int) codec.get("clockRate");
             if(codec.get("numChannels") != null)
                 codecCapability.numChannels = (int) codec.get("numChannels");
-            if(codec.get("sdpFmtpLine") != null) {
+            if(codec.get("sdpFmtpLine") != null && codec.get("sdpFmtpLine") != "") {
                 String sdpFmtpLine = (String) codec.get("sdpFmtpLine");
                 codecCapability.parameters = new HashMap<>();
                 String[] parameters = sdpFmtpLine.split(";");
@@ -1173,6 +1201,7 @@ class PeerConnectionObserver implements PeerConnection.Observer, EventChannel.St
       String transceiverId = transceiver.getMid();
       if (null == transceiverId) {
         transceiverId = stateProvider.getNextStreamUUID();
+        this.transceivers.put(transceiverId,transceiver);
       }
       transceiversParams.pushMap(new ConstraintsMap(transceiverToMap(transceiverId, transceiver)));
     }

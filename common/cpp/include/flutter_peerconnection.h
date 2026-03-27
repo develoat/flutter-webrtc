@@ -11,6 +11,7 @@ class FlutterPeerConnectionObserver : public RTCPeerConnectionObserver {
   FlutterPeerConnectionObserver(FlutterWebRTCBase* base,
                                 scoped_refptr<RTCPeerConnection> peerconnection,
                                 BinaryMessenger* messenger,
+                                TaskRunner* task_runner,
                                 const std::string& channel_name,
                                 std::string& peerConnectionId);
 
@@ -190,6 +191,19 @@ class FlutterPeerConnection {
  private:
   FlutterWebRTCBase* base_;
 };
+
+std::string RTCMediaTypeToString(RTCMediaType type);
+
+std::string transceiverDirectionString(RTCRtpTransceiverDirection direction);
+
+const char* iceConnectionStateString(RTCIceConnectionState state);
+
+const char* signalingStateString(RTCSignalingState state);
+
+const char* peerConnectionStateString(RTCPeerConnectionState state);
+
+const char* iceGatheringStateString(RTCIceGatheringState state);
+
 }  // namespace flutter_webrtc_plugin
 
 #endif  // !FLUTTER_WEBRTC_RTC_PEER_CONNECTION_HXX

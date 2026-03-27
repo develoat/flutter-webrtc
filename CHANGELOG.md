@@ -1,6 +1,360 @@
+
 # Changelog
 
---------------------------------------------
+[1.4.1] -2026-03-24
+
+* [Dart] fixed scalabilityMode (#2022).
+* [Windows/Linux] sanitize UTF-8 for device strings before platform messages(#2021)
+
+[1.4.0] -2026-03-17
+
+* [macOS]: use ScreenCaptureKit for screen capture (fallback to RTCDesktopCapturer) by @EnterDevelopers in (#1991)
+* [libwebrtc]: bump version for libwebrtc to m144.
+* [Win/Linux]: DataPacketCryptor for win/linux.
+
+[1.3.1] - 2026-02-25
+
+* [iOS/macOS] chore: bump webrtc to v137.7151.12.
+* [Android] fix: avoid Turkish locale issue in DegradationPreference.valueOf (#2002)
+* [macOS] Refresh screen capture sources & permission check (#1977)
+* [macOS] fix(macos): use CoreAudio ADM to prevent screen share crash (#1990)
+
+[1.3.0] - 2026-01-26
+
+* [Mobile/Desktop/Web] feat: Add `priority` and `networkPriority` to RTCRtpEncoding (#1983)
+* [Android] fix(android): Prevent ClassCastException validating track kind in method "mediaStreamAddTrack" (#1980)
+* [Android] fix(android): resolve ConcurrentModificationException in audio callback (#1985)
+* [Android] feat(android): Add configurable audio sample rate with smart defaults (#1967)
+* [Android] fix:hisi chip Error 0x80001001 (#1969)
+* [iOS] fix(ios): resolve critical memory leak in video recording (#1960)
+
+[1.2.1] - 2025-11-21
+
+* [Linux] fix: Enable software AEC/NS/AGC for linux.
+* [Android] fix: Removed redundant null check and release for audioFileRenderer.
+* [Web] fix: Fix Android chrome mobile not rendering html <video> element (#1938)
+* [Web] fix: Clip hard edge on web's rtc_video_view (#1936)
+
+[1.2.0] - 2025-09-13
+
+* [Android] upgrade compileSdk to 36 as standard for 16kb pages support (#1925)
+* [Apple/Android] Local recording API for Darwin and Android (#1880)
+* [Apple/Android] Data Packet Cryptor Support.
+
+[1.1.0] - 2025-08-20
+
+* [Apple/Android] feat: Add H265/HEVC support.
+* [Mobile/Desktop] feat: Support write logs with Logger (logger package) (#1891)
+* [Android] fix: Reduce Recording Stop Delay and Prevent Encoder OOM Crashes (Android) (#1912)
+* [Native/Web] feat: small setVolume addition (#1904)
+* [Web] feat: Add texture-based video rendering for web (#1911)
+* [Android] fix: RECORDINGS - Add fallback resolutions for unsupported stream frame sizes on low-end Android devices (#1900)
+* [Android] fix: Update proguard-rules.pro (#1902)
+
+[1.0.0] - 2025-07-25
+
+* Bump version to 1.0.0
+* [Native] feat: Upgrade libwebrtc to m137. (#1877).
+* [Doc] fix: typo in package description (#1895)
+* [Android] fix: Video recording crashing and freezing on Android 14 Devices (#1886)
+* [Android] fix: Add audio recording for Android Platform (#1884)
+* [Dart] fix: Removed outdated code to avoid UI not being displayed in Windows release mode (#1890)
+* [Apple] fix: Fix compile warnings (#1887)
+* [Apple] feat: Update to m137 with audio engine (#1875)
+* [Android] fix: Ensure both video and audio tracks are added before starting the muxer (#1879)
+
+[0.14.2] - 2025-07-01
+
+* [Windows/Linux] feat: Add audio processing and sink API for cpp. (#1867)
+* [Linux] fix: Fixed audio device selection error for Linux. (#1864)
+* [Android] fix: Fix screen capture orientation for landscape-native devices (#1854)
+
+[0.14.1] - 2025-05-22
+
+* [Android] fix: Recording bug (#1839)
+* [Android] fix: calls in terminated mode by disabling orientation manager (#1840)
+* [Android] fix: Wait for audio and video thread to fully stop to avoid corrupted recordings (#1836)
+
+[0.14.0] - 2025-05-06
+
+* [iOS/Android]feat: Media Recorder implementation Android and iOS (#1810)
+* [Wndows] fix: Pickup registrar for plugin by plugin registrar manager (#1752)
+* [Linux] fix: add task runner for linux. (#1821)
+* [iOS/macOS] fix: Fix deadlock when creating a frame cryptor on iOS/macOS.
+
+[0.13.1+hotfix.1] - 2025-04-07
+
+* [Android] fix: Fix `clearAndroidCommunicationDevice` call blocking.
+
+[0.13.1] - 2025-04-03
+
+* [Android] fix: remove setPreferredInputDevice when getUserAduio. (#1808)
+* [Web] fix: race condition in RTCVideoRenderer for Web (#1805)
+* [Android] fix: Migrate from onSurfaceDestroyed to onSurfaceCleanup for SurfaceProducer.Callback. (#1806)
+
+[0.13.0] - 2025-03-24
+
+* [All] feat: add getBufferedAmount for DataChannel. (#1796)
+* [Windows] fix: fixed non-platform thread call error. (#1795)
+
+[0.12.12+hotfix.1] - 2025-03-12
+
+* [Android] fix: fixed video not rendered after resume from background.
+
+[0.12.12] - 2025-03-09
+
+* [Android] feat: Migrate to the new Surface API. (#1726)
+* [Chore] chore: fix sponsors logo and links.
+
+[0.12.11] - 2025-02-23
+
+* [web] bump version for dart_webrtc.
+* [web] fix: compile error for web with --wasm.
+
+[0.12.10] - 2025-02-18
+
+* [web] bump version for dart_webrtc.
+* [web] fix: compile error for web with --wasm.
+
+[0.12.9] - 2025-02-13
+
+* [iOS] feat: Add option to start capture without broadcast picker (#1764)
+
+[0.12.8] - 2025-02-07
+
+* [Dart] feat: expose rtc video value (#1754)
+* [Dart] chore: bump webrtc-interface to 1.2.1.
+  
+[0.12.7] - 2025-01-24
+
+* [iOS] More robustness for video renderer. (#1751)
+
+[0.12.6] - 2025-01-20
+
+* [iOS] fix In-app screen recording.
+* [Android] fix: avoid crashes when surfaceTextureHelper is null. (#1743)
+
+[0.12.5+hotfix.2] - 2024-12-25
+
+* [iOS] fix: Audio route issue for iOS.
+
+[0.12.5+hotfix.1] - 2024-12-25
+
+* [iOS/macOS] fix: Pass MediaConstraints for getUserAudio.
+
+[0.12.5] - 2024-12-23
+
+* [iOS/Android] Fixed buf for screen capture.
+* [Android] Fixed first frame flickering.
+
+[0.12.4] - 2024-12-16
+
+* [iOS/Android] add FocusMode/ExposureMode settings for mobile. (#1435)
+* [Dart] fix compiler errors.
+* [eLinux] add $ORIGIN to rpath in elinux (#1720).
+
+[0.12.3] - 2024-11-29
+
+* [iOS/Android/macOS] feat: Expose AV Processing and Sink native APIs.
+
+[0.12.2] - 2024-11-26
+
+* [Dart] fix: race condition during video renderer initialization. (#1692)
+* [Darwin] fix: Add mutex lock to avoid pixelbuffer access contention.  (#1694)
+
+[0.12.1+hotfix.1] - 2024-10-25
+
+* [iOS] fix: fix switch camera broken on iOS.
+
+* [web] fix: add stub WebRTC.initialize for web.
+* [Docs] Fixing proguard rules link (#1686)
+* [iOS/Android] feat: support unprocessed audio (#825)
+* [eLinux] feat: add support for eLinux (#1338)
+
+[0.12.0+hotfix.1] - 2024-10-18
+
+* [macOS] fix compilation error for macOS.
+
+[0.12.0] - 2024-10-16
+
+* [iOS/macOS] Fix memory leak for iOS/macOS.
+* [iOS] Support MultiCam Session for iOS.
+
+[0.11.7] - 2024-09-04
+
+* [Web] Bump dart_webrtc to 1.4.9.
+* [Web] Bump web version to 1.0.0.
+
+[0.11.6+hotfix.1] - 2024-08-07
+
+* [iOS] Fixed PlatformView not rendering after resuming from background.
+
+[0.11.6] - 2024-08-02
+
+* [Web] change VideoElement to HTMLVideoElement.
+* [iOS] added shared singleton for FlutterWebRTCPlugin (#1634)
+* [iOS] Using av samplebuffer for PlatformView (#1635)
+
+[0.11.5] - 2024-07-23
+
+* [Android] Report actual sizes for camera media stream track (#1636).
+
+[0.11.4] - 2024-07-19
+
+* [Android] fix issue for camera switching.
+
+[0.11.3] - 2024-07-12
+
+* Bump version for libwebrtc.
+
+[0.11.2] - 2024-07-09
+
+* [Windows] fix crash for windows.
+* [Darwin] bump WebRTC version for darwin.
+
+[0.11.1] - 2024-06-17
+
+* [macOS] Downgrade macOS system dependencies to 10.14.
+
+[0.11.0] - 2024-06-17
+
+* [Native] upgrade libwebrtc to m125.6422.
+
+[0.10.8] - 2024-06-05
+
+* [iOS] fix(platform_view): fit cover works wrong (#1593)
+* [iOS/macOS] fix: Fix the issue that the video is not displayed when using 'video': true (#1592)
+* [Web] bump dart_webrtc to 1.4.6.
+
+[0.10.7] - 2024-05-30
+
+* [iOS] feat: add PlatformView Renderer for iOS. (#1569)
+* [iOS] fix: audio session control for iOS. (#1590)
+
+[0.10.6] - 2024-05-13
+
+* [Web] Some important fixes for web.
+
+[0.10.5] - 2024-05-13
+
+* [Android] fix: make MediaDeviceInfo (Audio deviceId, label, groupId) consistent. (#1583)
+
+[0.10.4] - 2024-05-06
+
+* [iOS/macOS] chore: update swift webrtc sdks to 114.5735.10 (#1576)
+* [Android] fix: actually call selectAudioOutput in enableSpeakerButPreferBluetooth
+* [iOS] fix: remember speakerphone mode for ensureAudioSession (#1568)
+* [Windows/Linux] Fix handling of unimplemented method (#1563)
+
+[0.10.3] - 2024-04-09
+
+* [iOS/macOS] Fix compilation warning for iOS/macOS.
+
+[0.10.2] - 2024-04-08
+
+* [Native/Web] feat: add keyRingSize/discardFrameWhenCryptorNotReady to KeyProviderOptions.
+
+[0.10.1] - 2024-04-08
+
+* [Web] fix renderer issue for web.
+
+[0.10.0] - 2024-04-08
+
+* [Web] move to package:web.
+
+[0.9.48+hotfix.1] - 2024-02-05
+
+* [Android] bump version for libwebrtc.
+
+[0.9.48] - 2024-02-05
+
+* [Android] bump version for libwebrtc.
+* [iOS] Supports ensureAudioSsession method for iOS only. (#1514)
+* [Android] fix android wrong display size. (#1508).
+
+[0.9.47] - 2023-11-29
+
+* [Windows/Linux] fix: Check the invalid value of candidate and session description. (#1484)
+* [Windows/Linux/macOS] fix: screen sharing issue for desktop.
+* [Web] fix: platformViewRegistry getter is deprecated (#1485)
+* [Dart] Throw exception for set src object (#1491).
+
+[0.9.46] - 2023-10-25
+
+* [iOS/macOS] fix: Crop video output size to target settings. (#1472)
+* [Android] fix: Fix bluetooth sco not stopping after room disconnect (#1475)
+
+[0.9.45] - 2023-09-27
+
+* [iOS/macOS] fix: send message on non-platform thread.
+* [Windows] fix: fix setSrcObj with trackId for Windows.
+* [Windows] fix: fix "unlock of unowned mutex" error when call "captureFrame()" func on windows.
+
+[0.9.44] - 2023-09-25
+
+* [Windows] fix: fix Renderer bug for Windows.
+* [Native] fix: Use independent threads to process frame encryption/decryption
+* [Native] fix: Correct handle SIF frame
+* [Native] fix: Fix a fault tolerance judgment failure
+
+[0.9.43] - 2023-09-20
+
+* [Native] fix: send frame cryptor events from signaling thread.
+* [Native] fix: h264 freeze when using E2EE.
+
+[0.9.42+hotfix.1] - 2023-09-15
+
+* [Windows/Linux] fix: fix cannot start vp8/h264 encoder correctly.
+
+[0.9.42] - 2023-09-15
+
+* [Dart/Native] feat: add more framcryptor api (#1444)
+* [Dart/Native] feat: support scalability mode (#1442)
+* [Android] fix: Turn off audio routing in non communication modes (#1438)
+
+* [Android] feat: Add more control over android audio options.
+
+[0.9.41] - 2023-08-30
+
+* [Android] feat: Add more control over android audio options.
+
+[0.9.40] - 2023-08-16
+
+* [Windows/Linux] fix: nullptr checking for sender/receiver for getStats.
+
+[0.9.39] - 2023-08-14
+
+* [Dart/Native] feat: add async methods for getting pc states.
+
+[0.9.38] - 2023-08-11
+
+* [Android] fix: Expose helper to clearCommunicationDevice on AudioManager.AUDIOFOCUS_LOSS
+* [Android] feat: support force SW codec list for android, and disable HW codec for VP9 by default.
+* [Android] fix: issue for audio device switch (#1417)
+* [Android/iOS] feat: Added setZoom method to support camera zooming while streaming. (#1412).
+
+[0.9.37] - 2023-08-07
+
+* [Native] fix: Skip set_sdp_fmtp_line if sdpFmtpLine is empty.
+* [Android] fix: fix android earpiece not being replaced after wired headset is disconnected.
+* [Dart] fix: partially rebuild RTCVideoView when renderVideo value changes.
+* [Android] feat: expose android audio modes.
+* [Android] feat: support forceSWCodec for Android.
+* [Linux] fix: add $ORIGIN to rpath.
+
+[0.9.36] - 2023-07-13
+
+* [Native] upgrade libwebrtc to m114.5735.02.
+* [Windows/Linux] Add implementation to MediaStreamTrack.captureFrame() for linux/windows.
+* [Darwin/Android] Support to ignore network adapters used for ICE on Android, iOS and macOS.
+
+[0.9.35] - 2023-06-30
+
+* [iOS] feat: expose audio mode for ios.
+* [Darwin] fix: compiler warning for Darwin.
+* [Dart] Fix setMicrophoneMute() not awaitable.
+* [Native] Update libwebrtc to m114.
+* [Dart/Web] Separate frame cryptor to dart-webrtc.
 
 [0.9.34] - 2023-06-14
 

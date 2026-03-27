@@ -63,7 +63,7 @@
   NSEnumerator* enumerator = [self.eventQueue objectEnumerator];
   id event;
   while ((event = enumerator.nextObject) != nil) {
-    self.eventSink(event);
+    postEvent(sink, event);
   };
   self.eventQueue = nil;
   return nil;
@@ -118,6 +118,21 @@
   }
 }
 
+- (void)dataChannelGetBufferedAmount:(nonnull NSString*)peerConnectionId
+          dataChannelId:(nonnull NSString*)dataChannelId 
+                result:(nonnull FlutterResult)result {
+  RTCPeerConnection* peerConnection = self.peerConnections[peerConnectionId];
+  RTCDataChannel* dataChannel = peerConnection.dataChannels[dataChannelId];
+  if(dataChannel == NULL || dataChannel.readyState != RTCDataChannelStateOpen) {
+    result([FlutterError
+          errorWithCode:[NSString stringWithFormat:@"%@Failed", @"dataChannelGetBufferedAmount"]
+                message:[NSString stringWithFormat:@"Error: dataChannel not found or not opened!"]
+                details:nil]);
+  } else {
+    result(@{@"bufferedAmount": @(dataChannel.bufferedAmount)});
+  }
+}
+
 - (void)dataChannelSend:(nonnull NSString*)peerConnectionId
           dataChannelId:(nonnull NSString*)dataChannelId
                    data:(id)data
@@ -149,7 +164,7 @@
 
 - (void)sendEvent:(id)event withChannel:(RTCDataChannel*)channel {
   if (channel.eventSink) {
-    channel.eventSink(event);
+    postEvent(channel.eventSink, event);
   } else {
     if (!channel.eventQueue) {
       channel.eventQueue = [NSMutableArray array];

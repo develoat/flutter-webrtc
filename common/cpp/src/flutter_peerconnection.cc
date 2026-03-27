@@ -2,6 +2,7 @@
 
 #include "base/scoped_ref_ptr.h"
 #include "flutter_data_channel.h"
+#include "flutter_frame_capturer.h"
 #include "rtc_dtmf_sender.h"
 #include "rtc_rtp_parameters.h"
 
@@ -35,6 +36,109 @@ std::string transceiverDirectionString(RTCRtpTransceiverDirection direction) {
       return "stoped";
   }
   return "";
+}
+
+const char* iceConnectionStateString(RTCIceConnectionState state) {
+  switch (state) {
+    case RTCIceConnectionStateNew:
+      return "new";
+    case RTCIceConnectionStateChecking:
+      return "checking";
+    case RTCIceConnectionStateConnected:
+      return "connected";
+    case RTCIceConnectionStateCompleted:
+      return "completed";
+    case RTCIceConnectionStateFailed:
+      return "failed";
+    case RTCIceConnectionStateDisconnected:
+      return "disconnected";
+    case RTCIceConnectionStateClosed:
+      return "closed";
+    case RTCIceConnectionStateMax:
+      return "statemax";
+  }
+  return "";
+}
+
+const char* signalingStateString(RTCSignalingState state) {
+  switch (state) {
+    case RTCSignalingStateStable:
+      return "stable";
+    case RTCSignalingStateHaveLocalOffer:
+      return "have-local-offer";
+    case RTCSignalingStateHaveLocalPrAnswer:
+      return "have-local-pranswer";
+    case RTCSignalingStateHaveRemoteOffer:
+      return "have-remote-offer";
+    case RTCSignalingStateHaveRemotePrAnswer:
+      return "have-remote-pranswer";
+    case RTCSignalingStateClosed:
+      return "closed";
+  }
+  return "";
+}
+
+const char* peerConnectionStateString(RTCPeerConnectionState state) {
+  switch (state) {
+    case RTCPeerConnectionStateNew:
+      return "new";
+    case RTCPeerConnectionStateConnecting:
+      return "connecting";
+    case RTCPeerConnectionStateConnected:
+      return "connected";
+    case RTCPeerConnectionStateDisconnected:
+      return "disconnected";
+    case RTCPeerConnectionStateFailed:
+      return "failed";
+    case RTCPeerConnectionStateClosed:
+      return "closed";
+  }
+  return "";
+}
+
+const char* iceGatheringStateString(RTCIceGatheringState state) {
+  switch (state) {
+    case RTCIceGatheringStateNew:
+      return "new";
+    case RTCIceGatheringStateGathering:
+      return "gathering";
+    case RTCIceGatheringStateComplete:
+      return "complete";
+  }
+  return "";
+}
+
+double stringToBitratePriority(const std::string& priority) {
+  if (priority == "very-low") return 0.5;
+  if (priority == "low") return 1.0;
+  if (priority == "medium") return 2.0;
+  if (priority == "high") return 4.0;
+  return 1.0;
+}
+
+std::string bitratePriorityToString(double bitratePriority) {
+  if (bitratePriority <= 0.5) return "very-low";
+  if (bitratePriority <= 1.0) return "low";
+  if (bitratePriority <= 2.0) return "medium";
+  return "high";
+}
+
+libwebrtc::RTCPriority stringToRTCPriority(const std::string& priority) {
+  if (priority == "very-low") return libwebrtc::RTCPriority::kVeryLow;
+  if (priority == "low") return libwebrtc::RTCPriority::kLow;
+  if (priority == "medium") return libwebrtc::RTCPriority::kMedium;
+  if (priority == "high") return libwebrtc::RTCPriority::kHigh;
+  return libwebrtc::RTCPriority::kLow;
+}
+
+std::string rtcPriorityToString(libwebrtc::RTCPriority priority) {
+  switch (priority) {
+    case libwebrtc::RTCPriority::kVeryLow: return "very-low";
+    case libwebrtc::RTCPriority::kLow: return "low";
+    case libwebrtc::RTCPriority::kMedium: return "medium";
+    case libwebrtc::RTCPriority::kHigh: return "high";
+  }
+  return "low";
 }
 
 EncodableMap rtpParametersToMap(
@@ -77,8 +181,14 @@ EncodableMap rtpParametersToMap(
         EncodableValue(static_cast<int>(encoding->max_framerate()));
     map[EncodableValue("scaleResolutionDownBy")] =
         EncodableValue(encoding->scale_resolution_down_by());
+    map[EncodableValue("scalabilityMode")] =
+        EncodableValue(encoding->scalability_mode().std_string());
     map[EncodableValue("ssrc")] =
         EncodableValue(static_cast<int>(encoding->ssrc()));
+    map[EncodableValue("priority")] =
+        EncodableValue(bitratePriorityToString(encoding->bitrate_priority()));
+    map[EncodableValue("networkPriority")] =
+        EncodableValue(rtcPriorityToString(encoding->network_priority()));
     encodings_info.push_back(EncodableValue(map));
   }
   info[EncodableValue("encodings")] = EncodableValue(encodings_info);
@@ -107,21 +217,26 @@ EncodableMap rtpParametersToMap(
   }
   info[EncodableValue("codecs")] = EncodableValue(codecs_info);
 
-  switch(rtpParameters->GetDegradationPreference()) {
+  switch (rtpParameters->GetDegradationPreference()) {
     case libwebrtc::RTCDegradationPreference::MAINTAIN_FRAMERATE:
-      info[EncodableValue("degradationPreference")] = EncodableValue("maintain-framerate");
+      info[EncodableValue("degradationPreference")] =
+          EncodableValue("maintain-framerate");
       break;
     case libwebrtc::RTCDegradationPreference::MAINTAIN_RESOLUTION:
-      info[EncodableValue("degradationPreference")] = EncodableValue("maintain-resolution");
+      info[EncodableValue("degradationPreference")] =
+          EncodableValue("maintain-resolution");
       break;
     case libwebrtc::RTCDegradationPreference::BALANCED:
-      info[EncodableValue("degradationPreference")] = EncodableValue("balanced");
+      info[EncodableValue("degradationPreference")] =
+          EncodableValue("balanced");
       break;
-    case libwebrtc::RTCDegradationPreference::DISABLED:
-      info[EncodableValue("degradationPreference")] = EncodableValue("disabled");
+    case libwebrtc::RTCDegradationPreference::MAINTAIN_FRAMERATE_AND_RESOLUTION:
+      info[EncodableValue("degradationPreference")] =
+          EncodableValue("maintain-framerate-and-resolution");
       break;
     default:
-      info[EncodableValue("degradationPreference")] = EncodableValue("balanced"); 
+      info[EncodableValue("degradationPreference")] =
+          EncodableValue("balanced");
       break;
   }
 
@@ -205,7 +320,8 @@ EncodableMap rtpReceiverToMap(
 
 EncodableMap transceiverToMap(scoped_refptr<RTCRtpTransceiver> transceiver) {
   EncodableMap info;
-  info[EncodableValue("transceiverId")] = EncodableValue(transceiver->transceiver_id().std_string());
+  info[EncodableValue("transceiverId")] =
+      EncodableValue(transceiver->transceiver_id().std_string());
   info[EncodableValue("mid")] = EncodableValue(transceiver->mid().std_string());
   info[EncodableValue("direction")] =
       EncodableValue(transceiverDirectionString(transceiver->direction()));
@@ -259,6 +375,7 @@ void FlutterPeerConnection::CreateRTCPeerConnection(
 
   std::unique_ptr<FlutterPeerConnectionObserver> observer(
       new FlutterPeerConnectionObserver(base_, pc, base_->messenger_,
+                                        base_->task_runner_,
                                         event_channel, uuid));
 
   base_->peerconnection_observers_[uuid] = std::move(observer);
@@ -272,7 +389,6 @@ void FlutterPeerConnection::RTCPeerConnectionClose(
     RTCPeerConnection* pc,
     const std::string& uuid,
     std::unique_ptr<MethodResultProxy> result) {
-
   auto it2 = base_->peerconnections_.find(uuid);
   if (it2 != base_->peerconnections_.end()) {
     it2->second->Close();
@@ -282,7 +398,7 @@ void FlutterPeerConnection::RTCPeerConnectionClose(
   auto it = base_->peerconnection_observers_.find(uuid);
   if (it != base_->peerconnection_observers_.end())
     base_->peerconnection_observers_.erase(it);
-  
+
   result->Success();
 }
 
@@ -436,6 +552,8 @@ FlutterPeerConnection::mapToEncoding(const EncodableMap& params) {
 
   encoding->set_active(true);
   encoding->set_scale_resolution_down_by(1.0);
+  encoding->set_bitrate_priority(1.0);
+  encoding->set_network_priority(libwebrtc::RTCPriority::kLow);
 
   EncodableValue value = findEncodableValue(params, "active");
   if (!value.IsNull()) {
@@ -476,6 +594,21 @@ FlutterPeerConnection::mapToEncoding(const EncodableMap& params) {
   value = findEncodableValue(params, "scaleResolutionDownBy");
   if (!value.IsNull()) {
     encoding->set_scale_resolution_down_by(GetValue<double>(value));
+  }
+
+  value = findEncodableValue(params, "scalabilityMode");
+  if (!value.IsNull()) {
+    encoding->set_scalability_mode(GetValue<std::string>(value));
+  }
+
+  value = findEncodableValue(params, "priority");
+  if (!value.IsNull()) {
+    encoding->set_bitrate_priority(stringToBitratePriority(GetValue<std::string>(value)));
+  }
+
+  value = findEncodableValue(params, "networkPriority");
+  if (!value.IsNull()) {
+    encoding->set_network_priority(stringToRTCPriority(GetValue<std::string>(value)));
   }
 
   return encoding;
@@ -616,7 +749,14 @@ scoped_refptr<RTCRtpParameters> FlutterPeerConnection::updateRtpParameters(
       if (!value.IsNull()) {
         param->set_active(GetValue<bool>(value));
       }
-
+      value = findEncodableValue(map, "rid");
+      if (!value.IsNull()) {
+        param->set_rid(GetValue<std::string>(value));
+      }
+      value = findEncodableValue(map, "ssrc");
+      if (!value.IsNull()) {
+        param->set_ssrc(GetValue<int>(value));
+      }
       value = findEncodableValue(map, "maxBitrate");
       if (!value.IsNull()) {
         param->set_max_bitrate_bps(GetValue<int>(value));
@@ -639,22 +779,38 @@ scoped_refptr<RTCRtpParameters> FlutterPeerConnection::updateRtpParameters(
       if (!value.IsNull()) {
         param->set_scale_resolution_down_by(GetValue<double>(value));
       }
-
+      value = findEncodableValue(map, "scalabilityMode");
+      if (!value.IsNull()) {
+        param->set_scalability_mode(GetValue<std::string>(value));
+      }
+      value = findEncodableValue(map, "priority");
+      if (!value.IsNull()) {
+        param->set_bitrate_priority(stringToBitratePriority(GetValue<std::string>(value)));
+      }
+      value = findEncodableValue(map, "networkPriority");
+      if (!value.IsNull()) {
+        param->set_network_priority(stringToRTCPriority(GetValue<std::string>(value)));
+      }
       encoding++;
     }
   }
-  
-  EncodableValue value = findEncodableValue(newParameters, "degradationPreference");
-  if(!value.IsNull()) {
+
+  EncodableValue value =
+      findEncodableValue(newParameters, "degradationPreference");
+  if (!value.IsNull()) {
     const std::string degradationPreference = GetValue<std::string>(value);
-    if( degradationPreference == "maintain-framerate") {
-      parameters->SetDegradationPreference(libwebrtc::RTCDegradationPreference::MAINTAIN_FRAMERATE);
-    } else if (degradationPreference  == "maintain-resolution") {
-         parameters->SetDegradationPreference(libwebrtc::RTCDegradationPreference::MAINTAIN_RESOLUTION);
-    } else if(degradationPreference  == "balanced") {
-         parameters->SetDegradationPreference(libwebrtc::RTCDegradationPreference::BALANCED);
-    } else if(degradationPreference  == "disabled") {
-         parameters->SetDegradationPreference(libwebrtc::RTCDegradationPreference::DISABLED);
+    if (degradationPreference == "maintain-framerate") {
+      parameters->SetDegradationPreference(
+          libwebrtc::RTCDegradationPreference::MAINTAIN_FRAMERATE);
+    } else if (degradationPreference == "maintain-resolution") {
+      parameters->SetDegradationPreference(
+          libwebrtc::RTCDegradationPreference::MAINTAIN_RESOLUTION);
+    } else if (degradationPreference == "balanced") {
+      parameters->SetDegradationPreference(
+          libwebrtc::RTCDegradationPreference::BALANCED);
+    } else if (degradationPreference == "disabled") {
+      parameters->SetDegradationPreference(
+          libwebrtc::RTCDegradationPreference::DISABLED);
     }
   }
 
@@ -711,8 +867,8 @@ void FlutterPeerConnection::RtpTransceiverGetCurrentDirection(
     return;
   }
   EncodableMap map;
-  map[EncodableValue("result")] =
-      EncodableValue(transceiverDirectionString(transceiver->current_direction()));
+  map[EncodableValue("result")] = EncodableValue(
+      transceiverDirectionString(transceiver->current_direction()));
   result_ptr->Success(EncodableValue(map));
 }
 
@@ -731,11 +887,8 @@ void FlutterPeerConnection::CaptureFrame(
     RTCVideoTrack* track,
     std::string path,
     std::unique_ptr<MethodResultProxy> result) {
-  std::shared_ptr<MethodResultProxy> result_ptr(result.release());
-
-  // TODO pc->CaptureFrame();
-
-  result_ptr->Success();
+  FlutterFrameCapturer capturer(track, path);
+  capturer.CaptureFrame(std::move(result));
 }
 
 scoped_refptr<RTCRtpTransceiver> FlutterPeerConnection::getRtpTransceiverById(
@@ -793,7 +946,7 @@ void FlutterPeerConnection::RtpTransceiverSetCodecPreferences(
     auto codecNumChannels = findInt(codecMap, "channels");
     auto codecSdpFmtpLine = findString(codecMap, "sdpFmtpLine");
     auto codecCapability = RTCRtpCodecCapability::Create();
-    if (codecSdpFmtpLine != std::string())
+    if (codecSdpFmtpLine != std::string() && codecSdpFmtpLine.length() != 0)
       codecCapability->set_sdp_fmtp_line(codecSdpFmtpLine);
     codecCapability->set_clock_rate(codecClockRate);
     if (codecNumChannels != -1)
@@ -841,9 +994,6 @@ EncodableMap statsToMap(const scoped_refptr<MediaRTCStats>& stats) {
   auto members = stats->Members();
   for (int i = 0; i < members.size(); i++) {
     auto member = members[i];
-    if (!member->IsDefined()) {
-      continue;
-    }
     switch (member->GetType()) {
       case RTCStatsMember::Type::kBool:
         values[EncodableValue(member->GetName().std_string())] =
@@ -891,7 +1041,7 @@ void FlutterPeerConnection::GetStats(
     bool found = false;
     auto receivers = pc->receivers();
     for (auto receiver : receivers.std_vector()) {
-      if (receiver->track()->id().c_string() == track_id) {
+      if (receiver->track() && receiver->track()->id().c_string() == track_id) {
         found = true;
         pc->GetStats(
             receiver,
@@ -912,7 +1062,7 @@ void FlutterPeerConnection::GetStats(
     }
     auto senders = pc->senders();
     for (auto sender : senders.std_vector()) {
-      if (sender->track()->id().c_string() == track_id) {
+      if (sender->track() && sender->track()->id().c_string() == track_id) {
         found = true;
         pc->GetStats(
             sender,
@@ -1026,78 +1176,22 @@ FlutterPeerConnectionObserver::FlutterPeerConnectionObserver(
     FlutterWebRTCBase* base,
     scoped_refptr<RTCPeerConnection> peerconnection,
     BinaryMessenger* messenger,
+    TaskRunner* task_runner,
     const std::string& channel_name,
     std::string& peerConnectionId)
-    : event_channel_(EventChannelProxy::Create(messenger, channel_name)),
+    : event_channel_(EventChannelProxy::Create(messenger, task_runner, channel_name)),
       peerconnection_(peerconnection),
       base_(base),
       id_(peerConnectionId) {
   peerconnection->RegisterRTCPeerConnectionObserver(this);
 }
 
-static const char* iceConnectionStateString(RTCIceConnectionState state) {
-  switch (state) {
-    case RTCIceConnectionStateNew:
-      return "new";
-    case RTCIceConnectionStateChecking:
-      return "checking";
-    case RTCIceConnectionStateConnected:
-      return "connected";
-    case RTCIceConnectionStateCompleted:
-      return "completed";
-    case RTCIceConnectionStateFailed:
-      return "failed";
-    case RTCIceConnectionStateDisconnected:
-      return "disconnected";
-    case RTCIceConnectionStateClosed:
-      return "closed";
-    case RTCIceConnectionStateMax:
-      return "statemax";
-  }
-  return "";
-}
-
-static const char* signalingStateString(RTCSignalingState state) {
-  switch (state) {
-    case RTCSignalingStateStable:
-      return "stable";
-    case RTCSignalingStateHaveLocalOffer:
-      return "have-local-offer";
-    case RTCSignalingStateHaveLocalPrAnswer:
-      return "have-local-pranswer";
-    case RTCSignalingStateHaveRemoteOffer:
-      return "have-remote-offer";
-    case RTCSignalingStateHaveRemotePrAnswer:
-      return "have-remote-pranswer";
-    case RTCSignalingStateClosed:
-      return "closed";
-  }
-  return "";
-}
 
 void FlutterPeerConnectionObserver::OnSignalingState(RTCSignalingState state) {
   EncodableMap params;
   params[EncodableValue("event")] = "signalingState";
   params[EncodableValue("state")] = signalingStateString(state);
   event_channel_->Success(EncodableValue(params));
-}
-
-static const char* peerConnectionStateString(RTCPeerConnectionState state) {
-  switch (state) {
-    case RTCPeerConnectionStateNew:
-      return "new";
-    case RTCPeerConnectionStateConnecting:
-      return "connecting";
-    case RTCPeerConnectionStateConnected:
-      return "connected";
-    case RTCPeerConnectionStateDisconnected:
-      return "disconnected";
-    case RTCPeerConnectionStateFailed:
-      return "failed";
-    case RTCPeerConnectionStateClosed:
-      return "closed";
-  }
-  return "";
 }
 
 void FlutterPeerConnectionObserver::OnPeerConnectionState(
@@ -1108,17 +1202,6 @@ void FlutterPeerConnectionObserver::OnPeerConnectionState(
   event_channel_->Success(EncodableValue(params));
 }
 
-static const char* iceGatheringStateString(RTCIceGatheringState state) {
-  switch (state) {
-    case RTCIceGatheringStateNew:
-      return "new";
-    case RTCIceGatheringStateGathering:
-      return "gathering";
-    case RTCIceGatheringStateComplete:
-      return "complete";
-  }
-  return "";
-}
 
 void FlutterPeerConnectionObserver::OnIceGatheringState(
     RTCIceGatheringState state) {
@@ -1302,6 +1385,7 @@ void FlutterPeerConnectionObserver::OnDataChannel(
 
   std::unique_ptr<FlutterRTCDataChannelObserver> observer(
       new FlutterRTCDataChannelObserver(data_channel, base_->messenger_,
+                                        base_->task_runner_,
                                         event_channel));
 
   base_->lock();

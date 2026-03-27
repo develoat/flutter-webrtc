@@ -4,40 +4,39 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.Fragment;
 import android.app.FragmentTransaction;
+import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.hardware.Camera;
-import android.hardware.Camera.Parameters;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
+import android.graphics.Point;
 import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CaptureRequest;
 import android.media.AudioDeviceInfo;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionConfig;
 import android.media.projection.MediaProjectionManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.ParcelFileDescriptor;
 import android.os.ResultReceiver;
 import android.provider.MediaStore;
 import android.util.Log;
-import android.util.Range;
+import android.util.Pair;
 import android.util.SparseArray;
-import android.view.Surface;
+import android.view.Display;
 import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
 import com.cloudwebrtc.webrtc.audio.AudioSwitchManager;
+import com.cloudwebrtc.webrtc.audio.AudioUtils;
+import com.cloudwebrtc.webrtc.audio.LocalAudioTrack;
 import com.cloudwebrtc.webrtc.record.AudioChannel;
 import com.cloudwebrtc.webrtc.record.AudioSamplesInterceptor;
 import com.cloudwebrtc.webrtc.record.MediaRecorderImpl;
@@ -49,20 +48,24 @@ import com.cloudwebrtc.webrtc.utils.EglUtils;
 import com.cloudwebrtc.webrtc.utils.MediaConstraintsUtils;
 import com.cloudwebrtc.webrtc.utils.ObjectType;
 import com.cloudwebrtc.webrtc.utils.PermissionUtils;
+import com.cloudwebrtc.webrtc.video.LocalVideoTrack;
+import com.cloudwebrtc.webrtc.video.VideoCapturerInfo;
 
 import org.webrtc.AudioSource;
 import org.webrtc.AudioTrack;
 import org.webrtc.Camera1Capturer;
 import org.webrtc.Camera1Enumerator;
+import org.webrtc.Camera1Helper;
 import org.webrtc.Camera2Capturer;
 import org.webrtc.Camera2Enumerator;
-import org.webrtc.CameraEnumerationAndroid.CaptureFormat;
+import org.webrtc.Camera2Helper;
 import org.webrtc.CameraEnumerator;
 import org.webrtc.CameraVideoCapturer;
 import org.webrtc.MediaConstraints;
 import org.webrtc.MediaStream;
 import org.webrtc.MediaStreamTrack;
 import org.webrtc.PeerConnectionFactory;
+import org.webrtc.Size;
 import org.webrtc.ScreenCapturerAndroid;
 import org.webrtc.SurfaceTextureHelper;
 import org.webrtc.VideoCapturer;
@@ -71,7 +74,9 @@ import org.webrtc.VideoTrack;
 import org.webrtc.audio.JavaAudioDeviceModule;
 
 import java.io.File;
-import java.lang.reflect.Field;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -83,8 +88,7 @@ import io.flutter.plugin.common.MethodChannel.Result;
  * The implementation of {@code getUserMedia} extracted into a separate file in order to reduce
  * complexity and to (somewhat) separate concerns.
  */
-class GetUserMediaImpl {
-
+public class GetUserMediaImpl {
     private static final int DEFAULT_WIDTH = 1280;
     private static final int DEFAULT_HEIGHT = 720;
     private static final int DEFAULT_FPS = 20;
@@ -102,7 +106,7 @@ class GetUserMediaImpl {
 
     static final String TAG = FlutterWebRTCPlugin.TAG;
 
-    private final Map<String, VideoCapturerInfo> mVideoCapturers = new HashMap<>();
+    private final Map<String, VideoCapturerInfoEx> mVideoCapturers = new HashMap<>();
     private final Map<String, SurfaceTextureHelper> mSurfaceTextureHelpers = new HashMap<>();
     private final StateProvider stateProvider;
     private final Context applicationContext;
@@ -114,8 +118,9 @@ class GetUserMediaImpl {
     JavaAudioDeviceModule audioDeviceModule;
     private final SparseArray<MediaRecorderImpl> mediaRecorders = new SparseArray<>();
     private AudioDeviceInfo preferredInput = null;
-
+    private boolean isTorchOn;
     private Intent mediaProjectionData = null;
+
 
     public void screenRequestPermissions(ResultReceiver resultReceiver) {
         mediaProjectionData = null;
@@ -145,6 +150,22 @@ class GetUserMediaImpl {
         }
     }
 
+    public void requestCapturePermission(final Result result) {
+        screenRequestPermissions(
+                new ResultReceiver(new Handler(Looper.getMainLooper())) {
+                    @Override
+                    protected void onReceiveResult(int requestCode, Bundle resultData) {
+                        int resultCode = resultData.getInt(GRANT_RESULTS);
+                        if (resultCode == Activity.RESULT_OK) {
+                            mediaProjectionData = resultData.getParcelable(PROJECTION_DATA);
+                            result.success(true);
+                        } else {
+                            result.success(false);
+                        }
+                    }
+                });
+    }
+
     public static class ScreenRequestPermissionsFragment extends Fragment {
 
         private ResultReceiver resultReceiver = null;
@@ -166,7 +187,6 @@ class GetUserMediaImpl {
                 Log.w(
                         TAG,
                         "Can't run requestStart() due to a low API level. API level 21 or higher is required.");
-                return;
             } else {
                 MediaProjectionManager mediaProjectionManager =
                         (MediaProjectionManager) activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
@@ -272,23 +292,21 @@ class GetUserMediaImpl {
      * @param isFacing   'user' mapped with 'front' is true (default) 'environment' mapped with 'back'
      *                   is false
      * @param sourceId   (String) use this sourceId and ignore facing mode if specified.
-     * @return VideoCapturer can invoke with <tt>startCapture</tt>/<tt>stopCapture</tt> <tt>null</tt>
+     * @return Pair of deviceName to VideoCapturer. Can invoke with <tt>startCapture</tt>/<tt>stopCapture</tt> <tt>null</tt>
      * if not matched camera with specified facing mode.
      */
-    private Map<String, VideoCapturer> createVideoCapturer(
-            CameraEnumerator enumerator, boolean isFacing, String sourceId) {
-        VideoCapturer videoCapturer = null;
-        Map<String,VideoCapturer> result = new HashMap<String,VideoCapturer>();
+    private Pair<String, VideoCapturer> createVideoCapturer(
+            CameraEnumerator enumerator, boolean isFacing, String sourceId, CameraEventsHandler cameraEventsHandler) {
+        VideoCapturer videoCapturer;
         // if sourceId given, use specified sourceId first
         final String[] deviceNames = enumerator.getDeviceNames();
         if (sourceId != null && !sourceId.equals("")) {
             for (String name : deviceNames) {
                 if (name.equals(sourceId)) {
-                    videoCapturer = enumerator.createCapturer(name, new CameraEventsHandler());
+                    videoCapturer = enumerator.createCapturer(name, cameraEventsHandler);
                     if (videoCapturer != null) {
                         Log.d(TAG, "create user specified camera " + name + " succeeded");
-                       result.put(name,videoCapturer);
-                       return result;
+                        return new Pair<>(name, videoCapturer);
                     } else {
                         Log.d(TAG, "create user specified camera " + name + " failed");
                         break; // fallback to facing mode
@@ -301,12 +319,11 @@ class GetUserMediaImpl {
         String facingStr = isFacing ? "front" : "back";
         for (String name : deviceNames) {
             if (enumerator.isFrontFacing(name) == isFacing) {
-                videoCapturer = enumerator.createCapturer(name, new CameraEventsHandler());
+                videoCapturer = enumerator.createCapturer(name, cameraEventsHandler);
                 if (videoCapturer != null) {
                     Log.d(TAG, "Create " + facingStr + " camera " + name + " succeeded");
 
-                    result.put(name,videoCapturer);
-                    return result;
+                    return new Pair<>(name, videoCapturer);
                 } else {
                     Log.e(TAG, "Create " + facingStr + " camera " + name + " failed");
                 }
@@ -314,13 +331,13 @@ class GetUserMediaImpl {
         }
 
         // falling back to the first available camera
-        if (videoCapturer == null && deviceNames.length > 0){
-            videoCapturer = enumerator.createCapturer(deviceNames[0], new CameraEventsHandler());
+        if (deviceNames.length > 0) {
+            videoCapturer = enumerator.createCapturer(deviceNames[0], cameraEventsHandler);
             Log.d(TAG, "Falling back to the first available camera");
-            result.put(deviceNames[0],videoCapturer);
+            return new Pair<>(deviceNames[0], videoCapturer);
         }
 
-        return result;
+        return null;
     }
 
     /**
@@ -379,19 +396,10 @@ class GetUserMediaImpl {
         String trackId = stateProvider.getNextTrackUUID();
         PeerConnectionFactory pcFactory = stateProvider.getPeerConnectionFactory();
         AudioSource audioSource = pcFactory.createAudioSource(audioConstraints);
-
-        if(deviceId != null) {
-            try {
-                setPreferredInputDevice(Integer.parseInt(deviceId));
-            } catch (Exception e) {
-                Log.e(TAG, "setPreferredInputDevice failed", e);
-            }
-        }
-
-        AudioTrack track =  pcFactory.createAudioTrack(trackId, audioSource);
+        AudioTrack track = pcFactory.createAudioTrack(trackId, audioSource);
         stream.addTrack(track);
 
-        stateProvider.putLocalTrack(track.id(), track);
+        stateProvider.putLocalTrack(track.id(), new LocalAudioTrack(track));
 
         ConstraintsMap trackParams = new ConstraintsMap();
         trackParams.putBoolean("enabled", track.enabled());
@@ -401,8 +409,10 @@ class GetUserMediaImpl {
         trackParams.putString("readyState", track.state().toString());
         trackParams.putBoolean("remote", false);
 
-        if(deviceId == null) {
-            deviceId = "" + getPreferredInputDevice(preferredInput);
+        if (deviceId == null) {
+            if (VERSION.SDK_INT >= VERSION_CODES.M) {
+                deviceId = "" + getPreferredInputDevice(preferredInput);
+            }
         }
 
         ConstraintsMap settings = new ConstraintsMap();
@@ -499,15 +509,13 @@ class GetUserMediaImpl {
 
     void getDisplayMedia(
             final ConstraintsMap constraints, final Result result, final MediaStream mediaStream) {
-        if(mediaProjectionData == null){
+        if (mediaProjectionData == null) {
             screenRequestPermissions(
                     new ResultReceiver(new Handler(Looper.getMainLooper())) {
                         @Override
                         protected void onReceiveResult(int requestCode, Bundle resultData) {
-
-                            /* Create ScreenCapture */
-                            int resultCode = resultData.getInt(GRANT_RESULTS);
                             Intent mediaProjectionData = resultData.getParcelable(PROJECTION_DATA);
+                            int resultCode = resultData.getInt(GRANT_RESULTS);
 
                             if (resultCode != Activity.RESULT_OK) {
                                 resultError("screenRequestPermissions", "User didn't give permission to capture the screen.", result);
@@ -519,11 +527,11 @@ class GetUserMediaImpl {
         } else {
             getDisplayMedia(result, mediaStream, mediaProjectionData);
         }
-
     }
 
-    private void getDisplayMedia(final Result result, final MediaStream mediaStream, final Intent mediaProjectionData){
-        MediaStreamTrack[] tracks = new MediaStreamTrack[1];
+    private void getDisplayMedia(final Result result, final MediaStream mediaStream, final Intent mediaProjectionData) {
+        /* Create ScreenCapture */
+        VideoTrack displayTrack = null;
         VideoCapturer videoCapturer = null;
         videoCapturer =
                 new ScreenCapturerAndroid(
@@ -582,41 +590,32 @@ class GetUserMediaImpl {
         mVideoCapturers.put(trackId, info);
         mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
 
-        tracks[0] = pcFactory.createVideoTrack(trackId, videoSource);
+        displayTrack = pcFactory.createVideoTrack(trackId, videoSource);
 
         ConstraintsArray audioTracks = new ConstraintsArray();
         ConstraintsArray videoTracks = new ConstraintsArray();
         ConstraintsMap successResult = new ConstraintsMap();
 
-        for (MediaStreamTrack track : tracks) {
-            if (track == null) {
-                continue;
-            }
+        if (displayTrack  != null) {
+            String id = displayTrack.id();
 
-            String id = track.id();
+            LocalVideoTrack displayLocalVideoTrack = new LocalVideoTrack(displayTrack);
+            videoSource.setVideoProcessor(displayLocalVideoTrack);
 
-            if (track instanceof AudioTrack) {
-                mediaStream.addTrack((AudioTrack) track);
-            } else {
-                mediaStream.addTrack((VideoTrack) track);
-            }
-            stateProvider.putLocalTrack(id, track);
+            stateProvider.putLocalTrack(id, displayLocalVideoTrack);
 
             ConstraintsMap track_ = new ConstraintsMap();
-            String kind = track.kind();
+            String kind = displayTrack.kind();
 
-            track_.putBoolean("enabled", track.enabled());
+            track_.putBoolean("enabled", displayTrack.enabled());
             track_.putString("id", id);
             track_.putString("kind", kind);
             track_.putString("label", kind);
-            track_.putString("readyState", track.state().toString());
+            track_.putString("readyState", displayTrack.state().toString());
             track_.putBoolean("remote", false);
 
-            if (track instanceof AudioTrack) {
-                audioTracks.pushMap(track_);
-            } else {
-                videoTracks.pushMap(track_);
-            }
+            videoTracks.pushMap(track_);
+            mediaStream.addTrack(displayTrack);
         }
 
         String streamId = mediaStream.getId();
@@ -669,7 +668,7 @@ class GetUserMediaImpl {
         ConstraintsMap successResult = new ConstraintsMap();
 
         for (ConstraintsMap trackParam : trackParams) {
-            if(trackParam == null) {
+            if (trackParam == null) {
                 continue;
             }
             if (trackParam.getString("kind").equals("audio")) {
@@ -696,7 +695,7 @@ class GetUserMediaImpl {
      */
     @Nullable
     private Integer getConstrainInt(@Nullable ConstraintsMap constraintsMap, String key) {
-        if(constraintsMap == null){
+        if (constraintsMap == null) {
             return null;
         }
 
@@ -760,63 +759,101 @@ class GetUserMediaImpl {
         String facingMode = getFacingMode(videoConstraintsMap);
         isFacing = facingMode == null || !facingMode.equals("environment");
         String deviceId = getSourceIdConstraint(videoConstraintsMap);
-
-        Map<String, VideoCapturer> result = createVideoCapturer(cameraEnumerator, isFacing, deviceId);
+        CameraEventsHandler cameraEventsHandler = new CameraEventsHandler();
+        Pair<String, VideoCapturer> result = createVideoCapturer(cameraEnumerator, isFacing, deviceId, cameraEventsHandler);
 
         if (result == null) {
             return null;
         }
 
-        if(deviceId == null) {
-            deviceId = result.keySet().iterator().next();
-        }
+        deviceId = result.first;
+        VideoCapturer videoCapturer = result.second;
 
-        VideoCapturer videoCapturer = result.get(deviceId);
+        if (facingMode == null && cameraEnumerator.isFrontFacing(deviceId)) {
+            facingMode = "user";
+        } else if (facingMode == null && cameraEnumerator.isBackFacing(deviceId)) {
+            facingMode = "environment";
+        }
+        // else, leave facingMode as it was
 
         PeerConnectionFactory pcFactory = stateProvider.getPeerConnectionFactory();
         VideoSource videoSource = pcFactory.createVideoSource(false);
         String threadName = Thread.currentThread().getName() + "_texture_camera_thread";
         SurfaceTextureHelper surfaceTextureHelper =
                 SurfaceTextureHelper.create(threadName, EglUtils.getRootEglBaseContext());
+
+        if (surfaceTextureHelper == null) {
+            Log.e(TAG, "surfaceTextureHelper is null");
+            return null;
+        }
+
         videoCapturer.initialize(
                 surfaceTextureHelper, applicationContext, videoSource.getCapturerObserver());
 
-        VideoCapturerInfo info = new VideoCapturerInfo();
+        VideoCapturerInfoEx info = new VideoCapturerInfoEx();
 
         Integer videoWidth = getConstrainInt(videoConstraintsMap, "width");
-        info.width = videoWidth != null
+        int targetWidth = videoWidth != null
                 ? videoWidth
                 : videoConstraintsMandatory != null && videoConstraintsMandatory.hasKey("minWidth")
                 ? videoConstraintsMandatory.getInt("minWidth")
                 : DEFAULT_WIDTH;
 
         Integer videoHeight = getConstrainInt(videoConstraintsMap, "height");
-        info.height = videoHeight != null
+        int targetHeight = videoHeight != null
                 ? videoHeight
                 : videoConstraintsMandatory != null && videoConstraintsMandatory.hasKey("minHeight")
                 ? videoConstraintsMandatory.getInt("minHeight")
                 : DEFAULT_HEIGHT;
 
         Integer videoFrameRate = getConstrainInt(videoConstraintsMap, "frameRate");
-        info.fps = videoFrameRate != null
+        int targetFps = videoFrameRate != null
                 ? videoFrameRate
                 : videoConstraintsMandatory != null && videoConstraintsMandatory.hasKey("minFrameRate")
                 ? videoConstraintsMandatory.getInt("minFrameRate")
                 : DEFAULT_FPS;
+
+        info.width = targetWidth;
+        info.height = targetHeight;
+        info.fps = targetFps;
         info.capturer = videoCapturer;
-        videoCapturer.startCapture(info.width, info.height, info.fps);
+        info.cameraName = deviceId;
+
+        // Find actual capture format.
+        Size actualSize = null;
+        if (videoCapturer instanceof Camera1Capturer) {
+            int cameraId = Camera1Helper.getCameraId(deviceId);
+            actualSize = Camera1Helper.findClosestCaptureFormat(cameraId, targetWidth, targetHeight);
+        } else if (videoCapturer instanceof Camera2Capturer) {
+            CameraManager cameraManager = (CameraManager) applicationContext.getSystemService(Context.CAMERA_SERVICE);
+            actualSize = Camera2Helper.findClosestCaptureFormat(cameraManager, deviceId, targetWidth, targetHeight);
+        }
+
+        if (actualSize != null) {
+            info.width = actualSize.width;
+            info.height = actualSize.height;
+        }
+
+        info.cameraEventsHandler = cameraEventsHandler;
+        videoCapturer.startCapture(targetWidth, targetHeight, targetFps);
+
+        cameraEventsHandler.waitForCameraOpen();
+
 
         String trackId = stateProvider.getNextTrackUUID();
         Log.d(TAG, "surfaceTextureHelper put: " + trackId + "(user)");
         mVideoCapturers.put(trackId, info);
         mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
-        Log.d(TAG, "changeCaptureFormat: " + info.width + "x" + info.height + "@" + info.fps);
-        videoSource.adaptOutputFormat(info.width, info.height, info.fps);
+
+        Log.d(TAG, "Target: " + targetWidth + "x" + targetHeight + "@" + targetFps + ", Actual: " + info.width + "x" + info.height + "@" + info.fps);
 
         VideoTrack track = pcFactory.createVideoTrack(trackId, videoSource);
         mediaStream.addTrack(track);
 
-        stateProvider.putLocalTrack(track.id(), track);
+        LocalVideoTrack localVideoTrack = new LocalVideoTrack(track);
+        videoSource.setVideoProcessor(localVideoTrack);
+
+        stateProvider.putLocalTrack(track.id(),localVideoTrack);
 
         ConstraintsMap trackParams = new ConstraintsMap();
 
@@ -833,30 +870,30 @@ class GetUserMediaImpl {
         settings.putInt("width", info.width);
         settings.putInt("height", info.height);
         settings.putInt("frameRate", info.fps);
-        if( facingMode!= null) settings.putString("facingMode",facingMode);
+        if (facingMode != null) settings.putString("facingMode", facingMode);
         trackParams.putMap("settings", settings.toMap());
 
         return trackParams;
     }
 
-    void removeVideoCapturerSync(String id) {
-        synchronized (mVideoCapturers) {
-            VideoCapturerInfo info = mVideoCapturers.get(id);
-            if (info != null) {
-                try {
-                    info.capturer.stopCapture();
-                } catch (InterruptedException e) {
-                    Log.e(TAG, "removeVideoCapturer() Failed to stop video capturer");
-                } finally {
-                    info.capturer.dispose();
-                    mVideoCapturers.remove(id);
-                    SurfaceTextureHelper helper = mSurfaceTextureHelpers.get(id);
-                    if (helper != null)  {
-                        Log.d(TAG, "surfaceTextureHelper dispose: " + id);
-                        helper.stopListening();
-                        helper.dispose();
-                        mSurfaceTextureHelpers.remove(id);
-                    }
+    void removeVideoCapturer(String id) {
+        VideoCapturerInfoEx info = mVideoCapturers.get(id);
+        if (info != null) {
+            try {
+                info.capturer.stopCapture();
+                if (info.cameraEventsHandler != null) {
+                    info.cameraEventsHandler.waitForCameraClosed();
+                }
+            } catch (InterruptedException e) {
+                Log.e(TAG, "removeVideoCapturer() Failed to stop video capturer");
+            } finally {
+                info.capturer.dispose();
+                mVideoCapturers.remove(id);
+                SurfaceTextureHelper helper = mSurfaceTextureHelpers.get(id);
+                if (helper != null) {
+                    helper.stopListening();
+                    helper.dispose();
+                    mSurfaceTextureHelpers.remove(id);
                 }
             }
         }
@@ -975,207 +1012,20 @@ class GetUserMediaImpl {
         mediaRecorders.append(id, mediaRecorder);
     }
 
-    void stopRecording(Integer id) {
-        MediaRecorderImpl mediaRecorder = mediaRecorders.get(id);
-        if (mediaRecorder != null) {
-            mediaRecorder.stopRecording();
-            mediaRecorders.remove(id);
-            File file = mediaRecorder.getRecordFile();
-            if (file != null) {
-                ContentValues values = new ContentValues(3);
-                values.put(MediaStore.Video.Media.TITLE, file.getName());
-                values.put(MediaStore.Video.Media.MIME_TYPE, "video/mp4");
-                values.put(MediaStore.Video.Media.DATA, file.getAbsolutePath());
-                applicationContext
-                        .getContentResolver()
-                        .insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values);
-            }
+    void stopRecording(Integer id, String albumName,  Runnable onFinished) {
+       MediaRecorderImpl mediaRecorder = mediaRecorders.get(id);
+       if (mediaRecorder != null) {
+            mediaRecorder.stopRecording(() -> {
+                mediaRecorders.remove(id);
+                onFinished.run();
+            });
         }
     }
 
-    void hasTorch(String trackId, Result result) {
-        VideoCapturerInfo info = mVideoCapturers.get(trackId);
-        if (info == null) {
-            resultError("hasTorch", "Video capturer not found for id: " + trackId, result);
-            return;
-        }
 
-        if (VERSION.SDK_INT >= VERSION_CODES.LOLLIPOP && info.capturer instanceof Camera2Capturer) {
-            CameraManager manager;
-            CameraDevice cameraDevice;
-
-            try {
-                Object session =
-                        getPrivateProperty(
-                                Camera2Capturer.class.getSuperclass(), info.capturer, "currentSession");
-                manager =
-                        (CameraManager)
-                                getPrivateProperty(Camera2Capturer.class, info.capturer, "cameraManager");
-                cameraDevice =
-                        (CameraDevice) getPrivateProperty(session.getClass(), session, "cameraDevice");
-            } catch (NoSuchFieldWithNameException e) {
-                // Most likely the upstream Camera2Capturer class have changed
-                resultError("hasTorch", "[TORCH] Failed to get `" + e.fieldName + "` from `" + e.className + "`", result);
-                return;
-            }
-
-            boolean flashIsAvailable;
-            try {
-                CameraCharacteristics characteristics =
-                        manager.getCameraCharacteristics(cameraDevice.getId());
-                flashIsAvailable = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-            } catch (CameraAccessException e) {
-                // Should never happen since we are already accessing the camera
-                throw new RuntimeException(e);
-            }
-
-            result.success(flashIsAvailable);
-            return;
-        }
-
-        if (info.capturer instanceof Camera1Capturer) {
-            Camera camera;
-
-            try {
-                Object session =
-                        getPrivateProperty(
-                                Camera1Capturer.class.getSuperclass(), info.capturer, "currentSession");
-                camera = (Camera) getPrivateProperty(session.getClass(), session, "camera");
-            } catch (NoSuchFieldWithNameException e) {
-                // Most likely the upstream Camera1Capturer class have changed
-                resultError("hasTorch", "[TORCH] Failed to get `" + e.fieldName + "` from `" + e.className + "`", result);
-                return;
-            }
-
-            Parameters params = camera.getParameters();
-            List<String> supportedModes = params.getSupportedFlashModes();
-
-            result.success(
-                    supportedModes != null && supportedModes.contains(Parameters.FLASH_MODE_TORCH));
-            return;
-        }
-
-        resultError("hasTorch", "[TORCH] Video capturer not compatible", result);
-    }
-
-    @RequiresApi(api = VERSION_CODES.LOLLIPOP)
-    void setTorch(String trackId, boolean torch, Result result) {
-        VideoCapturerInfo info = mVideoCapturers.get(trackId);
-        if (info == null) {
-            resultError("setTorch", "Video capturer not found for id: " + trackId, result);
-            return;
-        }
-
-        if (info.capturer instanceof Camera2Capturer) {
-            CameraCaptureSession captureSession;
-            CameraDevice cameraDevice;
-            CaptureFormat captureFormat;
-            int fpsUnitFactor;
-            Surface surface;
-            Handler cameraThreadHandler;
-
-            try {
-                Object session =
-                        getPrivateProperty(
-                                Camera2Capturer.class.getSuperclass(), info.capturer, "currentSession");
-                CameraManager manager =
-                        (CameraManager)
-                                getPrivateProperty(Camera2Capturer.class, info.capturer, "cameraManager");
-                captureSession =
-                        (CameraCaptureSession)
-                                getPrivateProperty(session.getClass(), session, "captureSession");
-                cameraDevice =
-                        (CameraDevice) getPrivateProperty(session.getClass(), session, "cameraDevice");
-                captureFormat =
-                        (CaptureFormat) getPrivateProperty(session.getClass(), session, "captureFormat");
-                fpsUnitFactor = (int) getPrivateProperty(session.getClass(), session, "fpsUnitFactor");
-                surface = (Surface) getPrivateProperty(session.getClass(), session, "surface");
-                cameraThreadHandler =
-                        (Handler) getPrivateProperty(session.getClass(), session, "cameraThreadHandler");
-            } catch (NoSuchFieldWithNameException e) {
-                // Most likely the upstream Camera2Capturer class have changed
-                resultError("setTorch", "[TORCH] Failed to get `" + e.fieldName + "` from `" + e.className + "`", result);
-                return;
-            }
-
-            try {
-                final CaptureRequest.Builder captureRequestBuilder =
-                        cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_RECORD);
-                captureRequestBuilder.set(
-                        CaptureRequest.FLASH_MODE,
-                        torch ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF);
-                captureRequestBuilder.set(
-                        CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-                        new Range<>(
-                                captureFormat.framerate.min / fpsUnitFactor,
-                                captureFormat.framerate.max / fpsUnitFactor));
-                captureRequestBuilder.set(
-                        CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
-                captureRequestBuilder.set(CaptureRequest.CONTROL_AE_LOCK, false);
-                captureRequestBuilder.addTarget(surface);
-                captureSession.setRepeatingRequest(
-                        captureRequestBuilder.build(), null, cameraThreadHandler);
-            } catch (CameraAccessException e) {
-                // Should never happen since we are already accessing the camera
-                throw new RuntimeException(e);
-            }
-
-            result.success(null);
-            return;
-        }
-
-        if (info.capturer instanceof Camera1Capturer) {
-            Camera camera;
-            try {
-                Object session =
-                        getPrivateProperty(
-                                Camera1Capturer.class.getSuperclass(), info.capturer, "currentSession");
-                camera = (Camera) getPrivateProperty(session.getClass(), session, "camera");
-            } catch (NoSuchFieldWithNameException e) {
-                // Most likely the upstream Camera1Capturer class have changed
-                resultError("setTorch", "[TORCH] Failed to get `" + e.fieldName + "` from `" + e.className + "`", result);
-                return;
-            }
-
-            Camera.Parameters params = camera.getParameters();
-            params.setFlashMode(
-                    torch ? Camera.Parameters.FLASH_MODE_TORCH : Camera.Parameters.FLASH_MODE_OFF);
-            camera.setParameters(params);
-
-            result.success(null);
-            return;
-        }
-        resultError("setTorch", "[TORCH] Video capturer not compatible", result);
-    }
-
-    private Object getPrivateProperty(Class klass, Object object, String fieldName)
-            throws NoSuchFieldWithNameException {
-        try {
-            Field field = klass.getDeclaredField(fieldName);
-            field.setAccessible(true);
-            return field.get(object);
-        } catch (NoSuchFieldException e) {
-            throw new NoSuchFieldWithNameException(klass.getName(), fieldName, e);
-        } catch (IllegalAccessException e) {
-            // Should never happen since we are calling `setAccessible(true)`
-            throw new RuntimeException(e);
-        }
-    }
-
-    private class NoSuchFieldWithNameException extends NoSuchFieldException {
-
-        String className;
-        String fieldName;
-
-        NoSuchFieldWithNameException(String className, String fieldName, NoSuchFieldException e) {
-            super(e.getMessage());
-            this.className = className;
-            this.fieldName = fieldName;
-        }
-    }
 
     public void reStartCamera(IsCameraEnabled getCameraId) {
-        for (Map.Entry<String, VideoCapturerInfo> item : mVideoCapturers.entrySet()) {
+        for (Map.Entry<String, VideoCapturerInfoEx> item : mVideoCapturers.entrySet()) {
             if (!item.getValue().isScreenCapture && getCameraId.isEnabled(item.getKey())) {
                 item.getValue().capturer.startCapture(
                         item.getValue().width,
@@ -1190,33 +1040,39 @@ class GetUserMediaImpl {
         boolean isEnabled(String id);
     }
 
-    public class VideoCapturerInfo {
-        VideoCapturer capturer;
-        int width;
-        int height;
-        int fps;
-        boolean isScreenCapture = false;
+    public static class VideoCapturerInfoEx extends VideoCapturerInfo  {
+        public CameraEventsHandler cameraEventsHandler;
+    }
+
+    public VideoCapturerInfoEx getCapturerInfo(String trackId) {
+        return mVideoCapturers.get(trackId);
     }
 
     @RequiresApi(api = VERSION_CODES.M)
-    void setPreferredInputDevice(int i) {
+    void setPreferredInputDevice(String deviceId) {
         android.media.AudioManager audioManager = ((android.media.AudioManager) applicationContext.getSystemService(Context.AUDIO_SERVICE));
         final AudioDeviceInfo[] devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS);
-        if (devices.length > i) {
-            preferredInput = devices[i];
-            audioDeviceModule.setPreferredInputDevice(preferredInput);
+        if (devices.length > 0) {
+            for (int i = 0; i < devices.length; i++) {
+                AudioDeviceInfo device = devices[i];
+                if(deviceId.equals(AudioUtils.getAudioDeviceId(device))) {
+                    preferredInput = device;
+                    audioDeviceModule.setPreferredInputDevice(preferredInput);
+                    return;
+                }
+            }
         }
     }
 
     @RequiresApi(api = VERSION_CODES.M)
     int getPreferredInputDevice(AudioDeviceInfo deviceInfo) {
-        if(deviceInfo == null) {
+        if (deviceInfo == null) {
             return -1;
         }
         android.media.AudioManager audioManager = ((android.media.AudioManager) applicationContext.getSystemService(Context.AUDIO_SERVICE));
         final AudioDeviceInfo[] devices = audioManager.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS);
-        for(int i = 0; i < devices.length; i++) {
-            if(devices[i].getId() == deviceInfo.getId()) {
+        for (int i = 0; i < devices.length; i++) {
+            if (devices[i].getId() == deviceInfo.getId()) {
                 return i;
             }
         }

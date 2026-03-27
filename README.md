@@ -8,38 +8,38 @@ WebRTC plugin for Flutter Mobile/Desktop/Web
 <p align="center">
 <strong>Sponsored with 💖 &nbsp by</strong><br />
 <a href="https://getstream.io/chat/flutter/tutorial/?utm_source=https://github.com/flutter-webrtc/flutter-webrtc&utm_medium=github&utm_content=developer&utm_term=flutter" target="_blank">
-<img src="https://stream-blog-v2.imgix.net/blog/wp-content/uploads/f7401112f41742c4e173c30d4f318cb8/stream_logo_white.png?w=350" alt="Stream Chat" style="margin: 8px" />
+<img src="assets/sponsors/stream-logo.png" alt="Stream Chat" style="margin: 8px; width: 350px" />
 </a>
 <br />
-Enterprise Grade APIs for Feeds & Chat. <a href="https://getstream.io/chat/flutter/tutorial/?utm_source=https://github.com/flutter-webrtc/flutter-webrtc&utm_medium=github&utm_content=developer&utm_term=flutter" target="_blank">Try the Flutter Chat tutorial</a> 💬
+Enterprise Grade APIs for Feeds, Chat, & Video. <a href="https://getstream.io/video/docs/flutter/?utm_source=https://github.com/flutter-webrtc/flutter-webrtc&utm_medium=sponsorship&utm_content=&utm_campaign=webrtcFlutterRepo_July2023_video_klmh22" target="_blank">Try the Flutter Video tutorial</a> 💬
 </p>
 
 </br>
 <p align="center">
 <a href="https://livekit.io/?utm_source=opencollective&utm_medium=github&utm_campaign=flutter-webrtc" target="_blank">
-<img src="https://avatars.githubusercontent.com/u/69438833?s=92&v=4" alt="LiveKit" style="margin: 8px" />
+<img src="https://avatars.githubusercontent.com/u/69438833?s=200&v=4" alt="LiveKit" style="margin: 8px; width: 100px" />
 </a>
 <br />
-   <a href="https://livekit.io/?utm_source=opencollective&utm_medium=github&utm_campaign=flutter-webrtc" target="_blank">LiveKit</a> - Open source WebRTC infrastructure
+   <a href="https://livekit.io/?utm_source=opencollective&utm_medium=github&utm_campaign=flutter-webrtc" target="_blank">LiveKit</a> - Open source WebRTC and realtime AI infrastructure
 <p>
 
 ## Functionality
 
 | Feature | Android | iOS | [Web](https://flutter.dev/web) | macOS | Windows | Linux | [Embedded](https://github.com/sony/flutter-elinux) | [Fuchsia](https://fuchsia.dev/) |
 | :-------------: | :-------------:| :-----: | :-----: | :-----: | :-----: | :-----: | :-----: | :-----: |
-| Audio/Video | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | [WIP] | |
-| Data Channel | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: |  [WIP] | |
-| Screen Capture | :heavy_check_mark: | [:heavy_check_mark:(*)](https://github.com/flutter-webrtc/flutter-webrtc/wiki/iOS-Screen-Sharing) | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | [WIP] | |
-| Unified-Plan | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | [WIP] | |
-| Simulcast | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | [WIP] | |
+| Audio/Video | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | |
+| Data Channel | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | |
+| Screen Capture | :heavy_check_mark: | [:heavy_check_mark:(*)](https://github.com/flutter-webrtc/flutter-webrtc/wiki/iOS-Screen-Sharing) | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | |
+| Unified-Plan | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | |
+| Simulcast | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | |
 | MediaRecorder | :warning: | :warning: | :heavy_check_mark: | | | | | |
-| SFrame/FrameCryptor | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | | |
+| End to End Encryption | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | :heavy_check_mark: | |
 | Insertable Streams | | | | | | | | |
 
 Additional platform/OS support from the other community
 
-- flutter-tizen: https://github.com/flutter-tizen/plugins/tree/master/packages/flutter_webrtc
-- flutter-elinux(WIP): https://github.com/sony/flutter-elinux-plugins/issues/7
+- flutter-tizen: <https://github.com/flutter-tizen/plugins/tree/master/packages/flutter_webrtc>
+- flutter-elinux(WIP): <https://github.com/sony/flutter-elinux-plugins/issues/7>
 
 Add `flutter_webrtc` as a [dependency in your pubspec.yaml file](https://flutter.io/using-packages/).
 
@@ -56,7 +56,8 @@ Add the following entry to your _Info.plist_ file, located in `<project root>/io
 
 This entry allows your app to access camera and microphone.
 
-### Note for iOS.
+### Note for iOS
+
 The WebRTC.xframework compiled after the m104 release no longer supports iOS arm devices, so need to add the `config.build_settings['ONLY_ACTIVE_ARCH'] = 'YES'` to your ios/Podfile in your project
 
 ios/Podfile
@@ -111,8 +112,9 @@ android {
 If necessary, in the same `build.gradle` you will need to increase `minSdkVersion` of `defaultConfig` up to `23` (currently default Flutter generator set it to `16`).
 
 ### Important reminder
+
 When you compile the release apk, you need to add the following operations,
-[Setup Proguard Rules](https://github.com/flutter-webrtc/flutter-webrtc/commit/d32dab13b5a0bed80dd9d0f98990f107b9b514f4)
+[Setup Proguard Rules](https://github.com/flutter-webrtc/flutter-webrtc/blob/main/android/proguard-rules.pro)
 
 ## Contributing
 

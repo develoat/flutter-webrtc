@@ -11,9 +11,13 @@ import androidx.lifecycle.DefaultLifecycleObserver;
 import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.LifecycleOwner;
 
+import com.cloudwebrtc.webrtc.audio.AudioProcessingController;
 import com.cloudwebrtc.webrtc.audio.AudioSwitchManager;
 import com.cloudwebrtc.webrtc.utils.AnyThreadSink;
 import com.cloudwebrtc.webrtc.utils.ConstraintsMap;
+
+import org.webrtc.ExternalAudioProcessingFactory;
+import org.webrtc.MediaStreamTrack;
 
 import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.embedding.engine.plugins.activity.ActivityAware;
@@ -22,7 +26,6 @@ import io.flutter.embedding.engine.plugins.lifecycle.HiddenLifecycleReference;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.common.EventChannel;
 import io.flutter.plugin.common.MethodChannel;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 import io.flutter.view.TextureRegistry;
 
 /**
@@ -38,29 +41,32 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
     private LifeCycleObserver observer;
     private Lifecycle lifecycle;
     private EventChannel eventChannel;
-    public EventChannel.EventSink eventSink;
+
+    // eventSink is static because FlutterWebRTCPlugin can be instantiated multiple times
+    // but the onListen(Object, EventChannel.EventSink) event only fires once for the first
+    // FlutterWebRTCPlugin instance, so for the next instances eventSink will be == null
+    public static EventChannel.EventSink eventSink;
 
     public FlutterWebRTCPlugin() {
+        sharedSingleton = this;
     }
 
-    /**
-     * Plugin registration.
-     */
-    public static void registerWith(Registrar registrar) {
-        final FlutterWebRTCPlugin plugin = new FlutterWebRTCPlugin();
+    public static FlutterWebRTCPlugin sharedSingleton;
 
-        plugin.startListening(registrar.context(), registrar.messenger(), registrar.textures());
+    public AudioProcessingController getAudioProcessingController() {
+        return methodCallHandler.audioProcessingController;
+    }
 
-        if (registrar.activeContext() instanceof Activity) {
-            plugin.methodCallHandler.setActivity((Activity) registrar.activeContext());
-        }
-        application = ((Application) registrar.context().getApplicationContext());
-        application.registerActivityLifecycleCallbacks(plugin.observer);
+    public MediaStreamTrack getTrackForId(String trackId, String peerConnectionId) {
+        return methodCallHandler.getTrackForId(trackId, peerConnectionId);
+    }
 
-        registrar.addViewDestroyListener(view -> {
-            plugin.stopListening();
-            return false;
-        });
+    public LocalTrack getLocalTrack(String trackId) {
+        return methodCallHandler.getLocalTrack(trackId);
+    }
+
+    public MediaStreamTrack getRemoteTrack(String trackId) {
+        return methodCallHandler.getRemoteTrack(trackId);
     }
 
     @Override
