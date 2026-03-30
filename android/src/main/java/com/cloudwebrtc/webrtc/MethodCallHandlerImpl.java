@@ -2454,6 +2454,16 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, 
     });
   }
 
+  // 復帰時に有効な画面共有トラックの VirtualDisplay を張り直す。
+  public void reStartScreenCapture() {
+    if (getUserMediaImpl == null) {
+      return;
+    }
+    // カメラは再開し直すが、画面共有は MediaProjection セッションが残るため
+    // VirtualDisplay の出力先だけを更新する。
+    getUserMediaImpl.refreshScreenCapturers();
+  }
+
   @RequiresApi(api = Build.VERSION_CODES.M)
   void requestPermissions(
           final ArrayList<String> permissions,

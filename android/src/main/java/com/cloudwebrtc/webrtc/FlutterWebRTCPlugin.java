@@ -157,6 +157,9 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
         public void onActivityResumed(Activity activity) {
             if (null != methodCallHandler) {
                 methodCallHandler.reStartCamera();
+                // 復帰後は画面共有の Surface も張り直す。
+                // これをしないとセッションは生きていても黒画面になることがある。
+                methodCallHandler.reStartScreenCapture();
             }
         }
 
@@ -164,6 +167,8 @@ public class FlutterWebRTCPlugin implements FlutterPlugin, ActivityAware, EventC
         public void onResume(LifecycleOwner owner) {
             if (null != methodCallHandler) {
                 methodCallHandler.reStartCamera();
+                // Lifecycle 経由で復帰した場合も同じ再接続処理を行う。
+                methodCallHandler.reStartScreenCapture();
             }
         }
 

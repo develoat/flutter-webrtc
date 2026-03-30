@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:core';
 
 import 'package:flutter/foundation.dart';
@@ -16,25 +17,45 @@ class GetDisplayMediaSample extends StatefulWidget {
   _GetDisplayMediaSampleState createState() => _GetDisplayMediaSampleState();
 }
 
-class _GetDisplayMediaSampleState extends State<GetDisplayMediaSample> {
+class _GetDisplayMediaSampleState extends State<GetDisplayMediaSample>
+    with WidgetsBindingObserver {
   MediaStream? _localStream;
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   bool _inCalling = false;
+  bool _wantsScreenShare = false;
+  bool _needsScreenShareRestart = false;
+  bool _isRestartingScreenShare = false;
   DesktopCapturerSource? selected_source_;
+  StreamSubscription<MediaProjectionStoppedEvent>? _projectionStoppedSub;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     initRenderers();
+    _projectionStoppedSub =
+        MediaProjectionStateListener.instance.onStopped.listen(
+      _handleProjectionStopped,
+    );
   }
 
   @override
-  void deactivate() {
-    super.deactivate();
-    if (_inCalling) {
-      _stop();
-    }
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _projectionStoppedSub?.cancel();
+    _wantsScreenShare = false;
+    _needsScreenShareRestart = false;
+    _disposeLocalStream();
+    _localRenderer.srcObject = null;
     _localRenderer.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      restartScreenShareIfNeeded();
+    }
   }
 
   Future<void> initRenderers() async {
@@ -52,9 +73,7 @@ class _GetDisplayMediaSampleState extends State<GetDisplayMediaSample> {
       }
     } else {
       if (WebRTC.platformIsAndroid) {
-        // Android specific
         Future<void> requestBackgroundPermission([bool isRetry = false]) async {
-          // Required for android screenshare.
           try {
             var hasPermissions = await FlutterBackground.hasPermissions;
             if (!isRetry) {
@@ -74,8 +93,9 @@ class _GetDisplayMediaSampleState extends State<GetDisplayMediaSample> {
             }
           } catch (e) {
             if (!isRetry) {
-              return await Future<void>.delayed(const Duration(seconds: 1),
-                  () => requestBackgroundPermission(true));
+              return Future<void>.delayed(const Duration(seconds: 1), () {
+                return requestBackgroundPermission(true);
+              });
             }
             print('could not publish video: $e');
           }
@@ -87,14 +107,53 @@ class _GetDisplayMediaSampleState extends State<GetDisplayMediaSample> {
     }
   }
 
-  // Platform messages are asynchronous, so we initialize in an async method.
   Future<void> _makeCall(DesktopCapturerSource? source) async {
+    _wantsScreenShare = true;
+    final stream = await _getDisplayMediaStream(source);
+    if (stream == null) {
+      _wantsScreenShare = false;
+      return;
+    }
+
+    await _setLocalStream(stream);
+    if (!mounted) return;
+
+    setState(() {
+      _inCalling = true;
+      _needsScreenShareRestart = false;
+    });
+  }
+
+  Future<void> _stop() async {
+    try {
+      await _disposeLocalStream();
+      _localRenderer.srcObject = null;
+    } catch (e) {
+      print(e.toString());
+    }
+  }
+
+  Future<void> _disposeLocalStream() async {
+    final localStream = _localStream;
+    _localStream = null;
+    if (localStream == null) {
+      return;
+    }
+
+    if (kIsWeb) {
+      localStream.getTracks().forEach((track) => track.stop());
+    }
+    await localStream.dispose();
+  }
+
+  Future<MediaStream?> _getDisplayMediaStream(
+      DesktopCapturerSource? source) async {
     setState(() {
       selected_source_ = source;
     });
 
     try {
-      var stream =
+      final stream =
           await navigator.mediaDevices.getDisplayMedia(<String, dynamic>{
         'video': selected_source_ == null
             ? true
@@ -107,34 +166,83 @@ class _GetDisplayMediaSampleState extends State<GetDisplayMediaSample> {
         print(
             'By adding a listener on onEnded you can: 1) catch stop video sharing on Web');
       };
+      return stream;
+    } catch (e) {
+      print(e.toString());
+      return null;
+    }
+  }
 
+  Future<void> _setLocalStream(MediaStream stream) async {
+    try {
+      await _disposeLocalStream();
       _localStream = stream;
       _localRenderer.srcObject = _localStream;
     } catch (e) {
       print(e.toString());
+      await stream.dispose();
+      rethrow;
     }
+  }
+
+  Future<void> _handleProjectionStopped(
+      MediaProjectionStoppedEvent event) async {
+    if (!mounted || !_wantsScreenShare || !WebRTC.platformIsAndroid) {
+      return;
+    }
+
+    final videoTracks = _localStream?.getVideoTracks();
+    if (event.trackId != null &&
+        videoTracks != null &&
+        videoTracks.isNotEmpty &&
+        videoTracks.first.id != event.trackId) {
+      return;
+    }
+
+    await _stop();
     if (!mounted) return;
 
     setState(() {
-      _inCalling = true;
+      _inCalling = false;
+      _needsScreenShareRestart = true;
     });
   }
 
-  Future<void> _stop() async {
+  Future<void> restartScreenShareIfNeeded() async {
+    if (!WebRTC.platformIsAndroid ||
+        !_wantsScreenShare ||
+        !_needsScreenShareRestart ||
+        _isRestartingScreenShare) {
+      return;
+    }
+
+    _isRestartingScreenShare = true;
     try {
-      if (kIsWeb) {
-        _localStream?.getTracks().forEach((track) => track.stop());
+      final stream = await _getDisplayMediaStream(selected_source_);
+      if (stream == null) {
+        return;
       }
-      await _localStream?.dispose();
-      _localStream = null;
-      _localRenderer.srcObject = null;
+
+      await _setLocalStream(stream);
+      if (!mounted) return;
+
+      setState(() {
+        _inCalling = true;
+        _needsScreenShareRestart = false;
+      });
     } catch (e) {
       print(e.toString());
+    } finally {
+      _isRestartingScreenShare = false;
     }
   }
 
   Future<void> _hangUp() async {
+    _wantsScreenShare = false;
+    _needsScreenShareRestart = false;
     await _stop();
+    if (!mounted) return;
+
     setState(() {
       _inCalling = false;
     });

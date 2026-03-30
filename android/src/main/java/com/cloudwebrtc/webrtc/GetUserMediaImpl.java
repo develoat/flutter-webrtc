@@ -493,7 +493,12 @@ public class GetUserMediaImpl {
 
     void getDisplayMedia(
             final ConstraintsMap constraints, final Result result, final MediaStream mediaStream) {
-        if (mediaProjectionData == null) {
+        // MediaProjection の許可 Intent は 1 回だけ使う。
+        // 端末によっては前回セッションの許可を再利用すると失敗する。
+        Intent cachedMediaProjectionData = mediaProjectionData;
+        mediaProjectionData = null;
+
+        if (cachedMediaProjectionData == null) {
             screenRequestPermissions(
                     new ResultReceiver(new Handler(Looper.getMainLooper())) {
                         @Override
@@ -509,12 +514,13 @@ public class GetUserMediaImpl {
                         }
                     });
         } else {
-            getDisplayMedia(result, mediaStream, mediaProjectionData);
+            getDisplayMedia(result, mediaStream, cachedMediaProjectionData);
         }
     }
 
     private void getDisplayMedia(final Result result, final MediaStream mediaStream, final Intent mediaProjectionData) {
         /* Create ScreenCapture */
+        String trackId = stateProvider.getNextTrackUUID();
         VideoTrack displayTrack = null;
         VideoCapturer videoCapturer = null;
         videoCapturer =
@@ -524,9 +530,7 @@ public class GetUserMediaImpl {
                             @Override
                             public void onStop() {
                                 super.onStop();
-                                // After Huawei P30 and Android 10 version test, the onstop method is called, which will not affect the next process,
-                                // and there is no need to call the resulterror method
-                                //resultError("MediaProjection.Callback()", "User revoked permission to capture the screen.", result);
+                                handleMediaProjectionStopped(trackId);
                             }
                         });
         if (videoCapturer == null) {
@@ -568,13 +572,13 @@ public class GetUserMediaImpl {
         info.isScreenCapture = true;
         info.capturer = videoCapturer;
 
-        videoCapturer.startCapture(info.width, info.height, info.fps);
-        Log.d(TAG, "ScreenCapturerAndroid.startCapture: " + info.width + "x" + info.height + "@" + info.fps);
-
-        String trackId = stateProvider.getNextTrackUUID();
-        Log.d(TAG, "surfaceTextureHelper put: " + trackId + "(display)");
+        // startCapture() 直後に onStop() が来ても後始末できるよう、
+        // trackId と capturer を先に登録しておく。
         mVideoCapturers.put(trackId, info);
         mSurfaceTextureHelpers.put(trackId, surfaceTextureHelper);
+
+        videoCapturer.startCapture(info.width, info.height, info.fps);
+        Log.d(TAG, "ScreenCapturerAndroid.startCapture: " + info.width + "x" + info.height + "@" + info.fps);
 
         displayTrack = pcFactory.createVideoTrack(trackId, videoSource);
 
@@ -1004,6 +1008,44 @@ public class GetUserMediaImpl {
     }
 
 
+
+    // MediaProjection 停止時の後始末と Dart への通知をまとめて行う。
+    private synchronized void handleMediaProjectionStopped(String trackId) {
+        VideoCapturerInfoEx info = mVideoCapturers.remove(trackId);
+        if (info == null || !info.isScreenCapture) {
+            return;
+        }
+
+        Log.d(TAG, "MediaProjection stopped for track: " + trackId);
+
+        info.capturer.dispose();
+
+        SurfaceTextureHelper helper = mSurfaceTextureHelpers.remove(trackId);
+        if (helper != null) {
+            helper.stopListening();
+            helper.dispose();
+        }
+
+        ConstraintsMap params = new ConstraintsMap();
+        params.putString("event", "onMediaProjectionStopped");
+        params.putString("trackId", trackId);
+        stateProvider.sendEvent(params.toMap());
+    }
+
+    // 復帰時に有効な画面共有トラックの VirtualDisplay を張り直す。
+    public void refreshScreenCapturers() {
+        for (Map.Entry<String, VideoCapturerInfoEx> item : mVideoCapturers.entrySet()) {
+            String trackId = item.getKey();
+            VideoCapturerInfoEx info = item.getValue();
+            LocalTrack localTrack = stateProvider.getLocalTrack(trackId);
+            if (!info.isScreenCapture || localTrack == null || !localTrack.enabled()) {
+                continue;
+            }
+            if (info.capturer instanceof OrientationAwareScreenCapturer) {
+                ((OrientationAwareScreenCapturer) info.capturer).refreshVirtualDisplay();
+            }
+        }
+    }
 
     public void reStartCamera(IsCameraEnabled getCameraId) {
         for (Map.Entry<String, VideoCapturerInfoEx> item : mVideoCapturers.entrySet()) {

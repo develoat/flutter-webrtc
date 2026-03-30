@@ -20,7 +20,6 @@ import android.hardware.display.VirtualDisplay;
 import android.media.projection.MediaProjectionManager;
 import android.os.Looper;
 import android.os.Handler;
-import android.os.Build;
 import android.view.Display;
 
 /**
@@ -47,6 +46,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     private MediaProjectionManager mediaProjectionManager;
     private WindowManager windowManager;
     private boolean isPortrait;
+    private Surface surface;
+    private boolean isCaptureActive = false;
 
     /**
      * Constructs a new Screen Capturer.
@@ -112,7 +113,7 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
     @Override
     public synchronized void startCapture(
             final int width, final int height, final int ignoredFramerate) {
-        //checkNotDisposed();
+        checkNotDisposed();
 
         this.isPortrait = isDeviceOrientationPortrait();
         if (this.isPortrait) {
@@ -132,27 +133,16 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
         createVirtualDisplay();
         capturerObserver.onCapturerStarted(true);
         surfaceTextureHelper.startListening(this);
+        isCaptureActive = true;
     }
 
     @Override
     public synchronized void stopCapture() {
         checkNotDisposed();
-        ThreadUtils.invokeAtFrontUninterruptibly(surfaceTextureHelper.getHandler(), new Runnable() {
+        runOnCaptureThread(new Runnable() {
             @Override
             public void run() {
-                surfaceTextureHelper.stopListening();
-                capturerObserver.onCapturerStopped();
-                if (virtualDisplay != null) {
-                    virtualDisplay.release();
-                    virtualDisplay = null;
-                }
-                if (mediaProjection != null) {
-                    // Unregister the callback before stopping, otherwise the callback recursively
-                    // calls this method.
-                    mediaProjection.unregisterCallback(mediaProjectionCallback);
-                    mediaProjection.stop();
-                    mediaProjection = null;
-                }
+                disposeCaptureResources(true);
             }
         });
     }
@@ -183,7 +173,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
                     @Override
                     public void run() {
                         if (virtualDisplay != null && surfaceTextureHelper != null) {
-                            virtualDisplay.setSurface(new Surface(surfaceTextureHelper.getSurfaceTexture()));
+                            surfaceTextureHelper.getSurfaceTexture().setDefaultBufferSize(oldWidth, oldHeight);
+                            virtualDisplay.setSurface(getOrCreateSurface());
                             surfaceTextureHelper.setTextureSize(oldWidth, oldHeight);
                             virtualDisplay.resize(oldWidth, oldHeight, VIRTUAL_DISPLAY_DPI);
                         }
@@ -193,7 +184,8 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
 
             if (oldWidth > oldHeight) {
                 surfaceTextureHelper.setTextureSize(oldWidth, oldHeight);
-                virtualDisplay.setSurface(new Surface(surfaceTextureHelper.getSurfaceTexture()));
+                surfaceTextureHelper.getSurfaceTexture().setDefaultBufferSize(oldWidth, oldHeight);
+                virtualDisplay.setSurface(getOrCreateSurface());
                 final Handler handler = new Handler(Looper.getMainLooper());
                 handler.postDelayed(new Runnable() {
                     @Override
@@ -216,8 +208,107 @@ public class OrientationAwareScreenCapturer implements VideoCapturer, VideoSink 
         surfaceTextureHelper.setTextureSize(width, height);
         surfaceTextureHelper.getSurfaceTexture().setDefaultBufferSize(width, height);
         virtualDisplay = mediaProjection.createVirtualDisplay("WebRTC_ScreenCapture", width, height,
-                VIRTUAL_DISPLAY_DPI, DISPLAY_FLAGS, new Surface(surfaceTextureHelper.getSurfaceTexture()),
+                VIRTUAL_DISPLAY_DPI, DISPLAY_FLAGS, getOrCreateSurface(),
                 null /* callback */, null /* callback handler */);
+    }
+
+    // アプリ復帰後に VirtualDisplay の出力先 Surface を張り直す。
+    public synchronized void refreshVirtualDisplay() {
+        if (isDisposed || surfaceTextureHelper == null || mediaProjection == null || virtualDisplay == null) {
+            return;
+        }
+
+        // 復帰時に古い Surface が無効化されていることがあるため、
+        // capture thread 上で作り直して描画を再開させる。
+        runOnCaptureThread(new Runnable() {
+            @Override
+            public void run() {
+                if (isDisposed || surfaceTextureHelper == null || mediaProjection == null || virtualDisplay == null) {
+                    return;
+                }
+
+                surfaceTextureHelper.setTextureSize(width, height);
+                surfaceTextureHelper.getSurfaceTexture().setDefaultBufferSize(width, height);
+
+                // 古い Surface を残したままだとキャプチャ自体は生きていても
+                // 黒フレームだけが出続けることがある。
+                virtualDisplay.setSurface(null);
+                releaseSurface();
+                virtualDisplay.resize(width, height, VIRTUAL_DISPLAY_DPI);
+                virtualDisplay.setSurface(getOrCreateSurface());
+            }
+        });
+    }
+
+    // MediaProjection 側から停止通知が来たときの後始末を行う。
+    public synchronized void onMediaProjectionStopped() {
+        if (isDisposed || surfaceTextureHelper == null) {
+            return;
+        }
+
+        runOnCaptureThread(new Runnable() {
+            @Override
+            public void run() {
+                disposeCaptureResources(false);
+            }
+        });
+    }
+
+    // 画面共有キャプチャで確保したリソースをまとめて解放する。
+    private void disposeCaptureResources(boolean stopMediaProjection) {
+        if (surfaceTextureHelper != null) {
+            surfaceTextureHelper.stopListening();
+        }
+        if (isCaptureActive && capturerObserver != null) {
+            capturerObserver.onCapturerStopped();
+        }
+        isCaptureActive = false;
+        if (virtualDisplay != null) {
+            virtualDisplay.release();
+            virtualDisplay = null;
+        }
+        releaseSurface();
+        if (mediaProjection != null) {
+            if (stopMediaProjection) {
+                // stop() の前に callback を外さないと、callback 経由で
+                // この後始末処理が再入してしまう。
+                mediaProjection.unregisterCallback(mediaProjectionCallback);
+                mediaProjection.stop();
+            }
+            // onStop() 起点の後始末では既に停止処理が始まっているため、
+            // ここで stop() を再度呼ばない。
+            mediaProjection = null;
+        }
+    }
+
+    // VirtualDisplay に渡す Surface を必要なタイミングで生成する。
+    private Surface getOrCreateSurface() {
+        if (surface == null) {
+            surface = new Surface(surfaceTextureHelper.getSurfaceTexture());
+        }
+        return surface;
+    }
+
+    // 使い終わった Surface を明示的に破棄する。
+    private void releaseSurface() {
+        if (surface != null) {
+            surface.release();
+            surface = null;
+        }
+    }
+
+    // SurfaceTexture と VirtualDisplay の操作を capture thread に直列化する。
+    private void runOnCaptureThread(Runnable runnable) {
+        if (surfaceTextureHelper == null) {
+            return;
+        }
+        // MediaProjection callback と競合しないように、
+        // SurfaceTexture / VirtualDisplay の変更は同じ thread に寄せる。
+        if (Looper.myLooper() == surfaceTextureHelper.getHandler().getLooper()) {
+            runnable.run();
+            return;
+        }
+        ThreadUtils.invokeAtFrontUninterruptibly(surfaceTextureHelper.getHandler(), runnable);
     }
 
     @Override
