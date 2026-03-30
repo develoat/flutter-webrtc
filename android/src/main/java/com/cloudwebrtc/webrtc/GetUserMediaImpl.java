@@ -545,22 +545,24 @@ public class GetUserMediaImpl {
 
         WindowManager wm =
                 (WindowManager) applicationContext.getSystemService(Context.WINDOW_SERVICE);
+        Display display = wm.getDefaultDisplay();
 
-        VideoCapturerInfo info = new VideoCapturerInfo();
-        //高さを取得する
-        double height = (double)wm.getDefaultDisplay().getHeight();
-        if (BASE_HEIGHT < height) {
+        Point size = new Point();
+        display.getRealSize(size);
+
+        VideoCapturerInfoEx info = new VideoCapturerInfoEx();
+        if (BASE_HEIGHT < size.y) {
             //基準の高さ以上のため縮小させる
             //ベースの高さから実際の高さとの割合を取得する
-            double heightRatio = BASE_HEIGHT / height;
+            double heightRatio = BASE_HEIGHT / size.y;
             //高さはベースのものをそのまま
             info.height = (int)BASE_HEIGHT;
             //取得した割合を使って横幅を計算
-            info.width = (int)(wm.getDefaultDisplay().getWidth() * heightRatio);
+            info.width = (int)(size.x * heightRatio);
         }else{
             //基準の高さ以下なので、そのままのサイズ
-            info.height = (int)height;
-            info.width = wm.getDefaultDisplay().getWidth();
+            info.height = (int)size.y;
+            info.width = size.x;
         }
         info.fps = DEFAULT_FPS;
         info.isScreenCapture = true;
@@ -883,11 +885,6 @@ public class GetUserMediaImpl {
         }
     }
 
-    void removeVideoCapturer(String id) {
-        new Thread(() -> {
-            removeVideoCapturerSync(id);
-        }).start();
-    }
 
     @RequiresApi(api = VERSION_CODES.M)
     private void requestPermissions(

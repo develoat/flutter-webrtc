@@ -37,7 +37,6 @@ public class FlutterRTCVideoRenderer implements EventChannel.StreamHandler {
 
         eventSink = null;
         producer.release();
-        texture.release();
     }
 
     /**

@@ -3,8 +3,10 @@ package com.cloudwebrtc.webrtc.audio;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.media.AudioAttributes;
+import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Build;
+import android.util.Log;
 import android.os.Handler;
 import android.os.Looper;
 
