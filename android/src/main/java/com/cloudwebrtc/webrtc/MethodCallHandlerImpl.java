@@ -33,6 +33,7 @@ import com.cloudwebrtc.webrtc.audio.RecordSamplesReadyCallbackAdapter;
 import com.cloudwebrtc.webrtc.record.AudioChannel;
 import com.cloudwebrtc.webrtc.record.FrameCapturer;
 import com.cloudwebrtc.webrtc.utils.AnyThreadResult;
+import com.cloudwebrtc.webrtc.utils.AnyThreadSink;
 import com.cloudwebrtc.webrtc.utils.Callback;
 import com.cloudwebrtc.webrtc.utils.ConstraintsArray;
 import com.cloudwebrtc.webrtc.utils.ConstraintsMap;
@@ -104,8 +105,9 @@ import io.flutter.plugin.common.MethodChannel.Result;
 import io.flutter.view.TextureRegistry;
 import io.flutter.view.TextureRegistry.SurfaceTextureEntry;
 
-public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
+public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider, EventChannel.StreamHandler  {
   static public final String TAG = "FlutterWebRTCPlugin";
+  static public final String NEXTAG = "NexWebRTCPlugin";
 
   private final Map<String, PeerConnectionObserver> mPeerConnectionObservers = new HashMap<>();
   private final BinaryMessenger messenger;
@@ -136,6 +138,9 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
 
   private Activity activity;
 
+  private EventChannel eventChannel;
+  private EventChannel.EventSink eventSink;
+
   private CustomVideoEncoderFactory videoEncoderFactory;
 
   private CustomVideoDecoderFactory videoDecoderFactory;
@@ -161,6 +166,9 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     this.context = context;
     this.textures = textureRegistry;
     this.messenger = messenger;
+
+    eventChannel = new EventChannel( messenger,"FlutterWebRTC.Event");
+    eventChannel.setStreamHandler(this);
   }
 
   static private void resultError(String method, String error, Result result) {
@@ -185,7 +193,19 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
       peerConnectionDispose(connection);
     }
     mPeerConnectionObservers.clear();
+    eventChannel.setStreamHandler(null);
   }
+
+  @Override
+  public void onListen(Object arguments, EventChannel.EventSink events) {
+      eventSink = new AnyThreadSink(events);
+  }
+
+  @Override
+  public void onCancel(Object arguments) {
+      eventSink = null;
+  }
+
   private void initialize(boolean bypassVoiceProcessing, int networkIgnoreMask, boolean forceSWCodec, List<String> forceSWCodecList,
   @Nullable ConstraintsMap androidAudioConfiguration, Severity logSeverity, @Nullable Integer audioSampleRate, @Nullable Integer audioOutputSampleRate) {
     if (mFactory != null) {
@@ -433,6 +453,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         break;
       }
       case "createPeerConnection": {
+        initAudioSwitch();
         Map<String, Object> constraints = call.argument("constraints");
         Map<String, Object> configuration = call.argument("configuration");
         String peerConnectionId = peerConnectionInit(new ConstraintsMap(configuration),
@@ -661,6 +682,11 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
         String peerConnectionId = call.argument("peerConnectionId");
         peerConnectionDispose(peerConnectionId);
         result.success(null);
+        if (AudioSwitchManager.instance != null) {
+          Log.d(TAG, "Stopping the audio manager...");
+          AudioSwitchManager.instance.stop();
+          AudioSwitchManager.instance.closeAudioSwitch();
+        }
         break;
       }
       case "createVideoRenderer": {
@@ -1685,6 +1711,7 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
           audio.putString("groupId", AudioUtils.getAudioGroupId(device));
           audio.putString("kind", "audioinput");
           array.pushMap(audio);
+          Log.d(NEXTAG, "getSources devices��"  + devices + " constraintsMap��" + audio.toString());
         }
       }
     }
@@ -2146,6 +2173,12 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
       }
       stream.removeTrack(track);
     }
+    try {
+        stream.dispose();
+    } catch (Exception e) {
+        //既に破棄されている場合
+        Log.e(TAG, "mediaStream is already dispose");
+    }
   }
 
   private void removeStreamForRendererById(String streamId) {
@@ -2421,6 +2454,16 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
     });
   }
 
+  // 復帰時に有効な画面共有トラックの VirtualDisplay を張り直す。
+  public void reStartScreenCapture() {
+    if (getUserMediaImpl == null) {
+      return;
+    }
+    // カメラは再開し直すが、画面共有は MediaProjection セッションが残るため
+    // VirtualDisplay の出力先だけを更新する。
+    getUserMediaImpl.refreshScreenCapturers();
+  }
+
   @RequiresApi(api = Build.VERSION_CODES.M)
   void requestPermissions(
           final ArrayList<String> permissions,
@@ -2461,5 +2504,66 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
             context,
             activity,
             permissions.toArray(new String[permissions.size()]), callback);
+  }
+
+  private void initAudioSwitch(){
+    if(AudioSwitchManager.instance == null){
+      AudioSwitchManager.instance = new AudioSwitchManager(context);
+    }
+    
+    AudioSwitchManager.instance.audioDeviceChangeListener = (devices, currentDevice) -> {
+        Log.w(TAG, "audioFocusChangeListener " + devices+ " " + currentDevice);
+        sendLog("audioDeviceChangeListener devices"  + devices.toString() + " currentDevice" + currentDevice.toString());
+        ConstraintsMap params = new ConstraintsMap();
+        params.putString("event", "onDeviceChange");
+        sendEvent(params.toMap());
+        return null;
+    };
+    AudioSwitchManager.instance.audioFocusChangeListener = (focusChange) -> {
+      onAudioFocusChange(Integer.toString(focusChange));
+      sendLog("audioFocusChangeListener focusChange" + Integer.toString(focusChange) + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice());
+      if (AudioSwitchManager.instance.isFocusGain(focusChange)) { 
+        //AUDIOFOCUS_GAIN (フォーカス復帰時)
+        sendLog("AUDIOFOCUS_GAIN before availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+        if(AudioSwitchManager.instance.resentFocusLoss != AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK && AudioSwitchManager.instance.resentFocusLoss != 0){
+          AudioSwitchManager.instance.resentFocusLoss = 0;
+          //Bluetoothを優先で接続する
+          AudioSwitchManager.instance.enableSpeakerButPreferBluetooth();
+        }
+        // AudioSwitchManager.instance.selectAudioOutput(AudioDeviceKind.fromTypeName("0"));
+        sendLog("AUDIOFOCUS_GAIN after  availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+      } else if (AudioSwitchManager.instance.isFocusLoss(focusChange) && focusChange != AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK){
+        //AUDIOFOCUS_LOSS (非フォーカス時)
+        sendLog("AUDIOFOCUS_LOSS before availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+        //非フォーカス時はEarpieceに変更し、再フォーカス時にBluetoothに接続できるようにする。
+        AudioSwitchManager.instance.selectAudioOutput(AudioDevice.Earpiece.class);
+        sendLog("AUDIOFOCUS_LOSS after  availableAudioDevices" + AudioSwitchManager.instance.availableAudioDevices() + " selectedAudioDevice" + AudioSwitchManager.instance.selectedAudioDevice().toString());
+      }
+    };
+  }
+
+  public void sendEvent(Object event) {
+    if(eventSink != null) {
+        eventSink.success(event);
+    }
+  }
+
+  private void sendLog(String value){
+    Log.d(NEXTAG, value);
+    if(eventSink != null) {
+        ConstraintsMap params = new ConstraintsMap();
+        params.putString("event", "onLogger");
+        params.putString("value", value);
+        eventSink.success(params.toMap());
+    }
+  }
+
+  private void onAudioFocusChange(String value){
+    if(eventSink != null) {
+        ConstraintsMap params = new ConstraintsMap();
+        params.putString("event", "onAudioFocusChange");
+        params.putString("value", value);
+        eventSink.success(params.toMap());
+    }
   }
 }

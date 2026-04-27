@@ -19,10 +19,22 @@ class MediaDeviceNative extends MediaDevices {
 
   static final MediaDeviceNative instance = MediaDeviceNative._internal();
 
+  final StreamController<String> logger =
+    StreamController.broadcast();
+
+  final StreamController<AndroidAudioFocusType?> onAudioFocusChange =
+      StreamController.broadcast();
+
   void handleEvent(String event, final Map<dynamic, dynamic> map) async {
     switch (map['event']) {
       case 'onDeviceChange':
         ondevicechange?.call(null);
+        break;
+      case 'onAudioFocusChange':
+        onAudioFocusChange.add(getFocusType(map['value']));
+        break;
+      case 'onLogger':
+        logger.add(map['value']);
         break;
     }
   }
@@ -107,5 +119,27 @@ class MediaDeviceNative extends MediaDevices {
     });
     // TODO(cloudwebrtc): return the selected device
     return MediaDeviceInfo(label: 'label', deviceId: options!.deviceId);
+  }
+
+  AndroidAudioFocusType? getFocusType(String? value){
+    if(value != null){
+      switch(int.tryParse(value)){
+        case 1:
+          return AndroidAudioFocusType.AUDIOFOCUS_GAIN;
+        case 2:
+          return AndroidAudioFocusType.AUDIOFOCUS_GAIN_TRANSIENT;
+        case 3:
+          return AndroidAudioFocusType.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK;
+        case -1:
+          return AndroidAudioFocusType.AUDIOFOCUS_LOSS;
+        case -2:
+          return AndroidAudioFocusType.AUDIOFOCUS_LOSS_TRANSIENT;
+        case -3:
+          return AndroidAudioFocusType.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK;
+        default:
+          return null;
+      }
+    }
+    return null;
   }
 }

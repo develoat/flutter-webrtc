@@ -806,7 +806,7 @@ static FlutterWebRTCPlugin *sharedSingleton;
     }
     [_localTracks removeObjectForKey:trackId];
     if (audioTrack) {
-      [self ensureAudioSession];
+      // [self ensureAudioSession];
     }
     FlutterRTCVideoRenderer *renderer = [self findRendererByTrackId:trackId];
     if(renderer != nil) {
@@ -1561,7 +1561,25 @@ static FlutterWebRTCPlugin *sharedSingleton;
     RTCPeerConnection* peerConnection = self.peerConnections[peerConnectionId];
     if (peerConnection) {
       result(@{@"state" : [self stringForSignalingState:peerConnection.signalingState]});
+    } else if ([@"mediaStreamTrackSetExposure" isEqualToString:call.method]) {
+    NSDictionary* argsMap = call.arguments;
+    NSString* trackId = argsMap[@"trackId"];
+    BOOL exposure = [argsMap[@"exposure"] boolValue];
+    RTCMediaStreamTrack* track = self.localTracks[trackId];
+    if (track != nil && [track isKindOfClass:[RTCVideoTrack class]]) {
+      RTCVideoTrack* videoTrack = (RTCVideoTrack*)track;
+      [self mediaStreamTrackSetExposure:videoTrack exposure:exposure result:result];
     } else {
+      if (track == nil) {
+        result([FlutterError errorWithCode:@"Track is nil" message:nil details:nil]);
+      } else {
+        result([FlutterError errorWithCode:[@"Track is class of "
+          stringByAppendingString:[[track class] description]]
+          message:nil
+          details:nil]);
+      }
+    }
+  } else {
       result([FlutterError
           errorWithCode:[NSString stringWithFormat:@"%@Failed", call.method]
                 message:[NSString stringWithFormat:@"Error: peerConnection not found!"]

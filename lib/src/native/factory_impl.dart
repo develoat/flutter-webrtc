@@ -124,3 +124,7 @@ FrameCryptorFactory get frameCryptorFactory => FrameCryptorFactoryImpl.instance;
 
 DataPacketCryptorFactory get dataPacketCryptorFactory =>
     DataPacketCryptorFactoryImpl.instance;
+
+StreamController<String> get logger => MediaDeviceNative.instance.logger;
+
+StreamController<AndroidAudioFocusType?> get onAudioFocusChange => MediaDeviceNative.instance.onAudioFocusChange;

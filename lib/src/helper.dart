@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:logger/logger.dart';
@@ -191,5 +193,21 @@ class Helper {
       throw Exception(
           'requestCapturePermission only support for Android/macOS');
     }
+  }
+
+  static Future<void> setAutoExposure(bool exposure, MediaStreamTrack track) async {
+    if (track.kind != 'video') {
+      throw 'The is not an video track => $track';
+    }
+    if (Platform.isIOS) {
+      await WebRTC.invokeMethod('mediaStreamTrackSetExposure', <String, dynamic>{
+        'trackId': track.id,
+        'exposure': exposure,
+      });
+    } else {
+      throw UnimplementedError();
+    }
+
+    return Future.value();
   }
 }

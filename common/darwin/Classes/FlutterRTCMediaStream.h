@@ -20,4 +20,9 @@
 - (void)selectAudioInput:(nonnull NSString*)deviceId result:(nullable FlutterResult)result;
 
 - (void)selectAudioOutput:(nonnull NSString*)deviceId result:(nullable FlutterResult)result;
+
+- (void)mediaStreamTrackSetExposure:(RTCMediaStreamTrack*)track
+                          exposure:(BOOL)exposure
+                          result:(FlutterResult)result;
+
 @end
